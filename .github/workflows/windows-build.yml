@@ -21,7 +21,7 @@ jobs:
       # 无 GPU 的 runner 上让 Electron 走软件渲染（脚本内部也会读 CI 变量加开关）
       CI: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
