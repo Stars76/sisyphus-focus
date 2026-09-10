@@ -83,7 +83,7 @@ jobs:
           if (-not (Get-ChildItem release -Filter *.exe)) { throw 'no artifacts produced' }
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sisyphus-windows-x64
           path: |
@@ -93,7 +93,7 @@ jobs:
 
       - name: Upload smoke diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sisyphus-smoke-diagnostics
           path: |
@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload UI review diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sisyphus-ui-review-diagnostics
           path: .tmp/ui-review-out/**
