@@ -54,7 +54,7 @@
   "devDependencies": {
     "@electron/asar": "^3.2.18",
     "electron": "^33.4.11",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.sisyphus.studio",
