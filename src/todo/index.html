@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 本地页面：只允许同目录资源，禁止任何网络连接与远程代码（见 SECURITY.md） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; font-src 'self' file: data:; media-src 'self' file:; connect-src 'none'; object-src 'none'; frame-src 'self' file:; worker-src 'none'; base-uri 'none'; form-action 'none'">
+<title>今日事 · 西西弗斯</title>
+<link rel="stylesheet" href="../shared/studio.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="card is-today" id="todo-app">
+
+  <header>
+    <div><h1 class="title">今日<i>事</i></h1></div>
+    <div class="daynav">
+      <button class="icon-btn" id="prevDay" aria-label="前一天" title="前一天"><sisy-icon name="LeftIcon"></sisy-icon></button>
+      <span class="day-label" id="dayLabel"></span>
+      <button class="icon-btn" id="nextDay" aria-label="后一天" title="后一天" disabled><sisy-icon name="RightIcon"></sisy-icon></button>
+      <button class="today-btn" id="todayBtn" title="回到今天" aria-label="回到今天" hidden>回今天</button>
+    </div>
+  </header>
+
+  <form class="add-row" id="addForm">
+    <input id="addInput" aria-label="新任务" placeholder="接下来，想做哪一件事？" autocomplete="off">
+    <button type="submit" aria-label="添加任务">添加</button>
+  </form>
+
+  <div class="list-summary"><span id="listHeading">今天的任务</span><span id="taskCount" role="status"></span><progress id="taskProgress" value="0" max="1" aria-label="任务完成进度"></progress><button id="filterBtn" class="list-filter" type="button" aria-pressed="false">只看未完成</button></div>
+  <ul class="todo-list" id="taskList" aria-label="任务列表"></ul>
+
+  <!-- 月历浮层（点击日历按钮后显示） -->
+  <div class="calendar-overlay" id="calendarOverlay" aria-label="任务日历">
+    <div class="cal-head">
+      <button class="icon-btn" id="calPrev" title="上个月"><sisy-icon name="LeftIcon"></sisy-icon></button>
+      <span class="cal-title" id="calTitle"></span>
+      <button class="icon-btn" id="calNext" title="下个月"><sisy-icon name="RightIcon"></sisy-icon></button>
+    </div>
+    <div class="cal-weekdays">
+      <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+    </div>
+    <div class="cal-days" id="calDays"></div>
+    <button class="cal-close" id="calClose" type="button">返回任务</button>
+  </div>
+
+  <div class="bottom-actions">
+    <button class="icon-btn cal-toggle" id="calToggle" title="日历" aria-haspopup="dialog"><sisy-icon name="CalendarIcon"></sisy-icon>日历</button>
+    <button class="icon-btn settings-btn" id="settingsBtn" title="设置与数据备份" aria-haspopup="dialog"><sisy-icon name="SettingsIcon"></sisy-icon>设置与备份</button>
+    <button class="icon-btn stats-btn" id="statsBtn" title="专注统计" aria-haspopup="dialog"><sisy-icon name="TimerIcon"></sisy-icon>统计</button>
+    <span class="footer-note">一步一步，按自己的节奏</span>
+  </div>
+
+  <div class="settings-panel" id="settingsPanel" aria-labelledby="settingsTitle">
+    <div class="settings-head">
+      <button class="icon-btn" id="backBtn" title="返回"><sisy-icon name="LeftIcon"></sisy-icon></button>
+      <span class="settings-title" id="settingsTitle">设置与备份</span>
+      <span style="width:28px;"></span>
+    </div>
+
+    <div class="settings-body">
+      <div class="settings-section">每日任务</div>
+      <div class="settings-desc">设置每天都会出现的固定任务，保存后第二天自动出现在首页。</div>
+      <ul class="settings-list" id="settingsList"></ul>
+      <div class="add-row" id="dailyForm" style="margin-top:8px;">
+        <input id="dailyInput" aria-label="新每日任务" placeholder="例如：睡前读十分钟书" autocomplete="off">
+        <button type="button" id="dailyAddBtn" aria-label="添加每日任务">添加</button>
+      </div>
+
+      <div class="settings-sep"></div>
+
+      <div class="settings-section">数据备份</div>
+      <div class="settings-desc">数据保存在这台电脑上。换电脑或清理数据前，先导出一份备份。</div>
+      <ul class="settings-list" id="dataList"></ul>
+      <details class="diagnostics"><summary>版本与存储位置</summary><div class="data-info" id="dataInfo"></div></details>
+    </div>
+  </div>
+
+  <div class="stats-panel" id="statsPanel" aria-labelledby="statsTitle" hidden>
+    <div class="settings-head"><button class="icon-btn" id="statsBack" title="返回"><sisy-icon name="LeftIcon"></sisy-icon></button><span class="settings-title" id="statsTitle">专注统计</span><span style="width:28px"></span></div>
+    <div class="stats-tabs" role="group" aria-label="统计范围"><button type="button" data-range="week" aria-pressed="true">本周</button><button type="button" data-range="month" aria-pressed="false">本月</button></div>
+    <div class="stats-grid"><div><b id="statMinutes">0</b><span>专注分钟</span></div><div><b id="statRounds">0</b><span>完成轮次</span></div><div><b id="statTasks">0</b><span>完成任务</span></div><div><b id="statStreak">0</b><span>连续天数</span></div></div>
+    <div class="stats-section">专注时段</div><div class="hours" id="statHours" role="list" aria-label="按开始时间分组的专注分钟"></div><p class="settings-desc" id="statsNote" role="status"></p>
+  </div>
+</div>
+
+<script src="../shared/log.js"></script>
+<script src="../shared/date.js"></script>
+<script src="../shared/storage.js"></script>
+<script src="../shared/toast.js"></script>
+<script src="../shared/icons.js"></script>
+<script src="../shared/dialog.js"></script>
+<script src="../shared/statistics.js"></script>
+<script src="state.js"></script>
+<script src="render.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

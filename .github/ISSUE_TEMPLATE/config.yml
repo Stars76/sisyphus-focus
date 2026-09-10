@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用问题与讨论
+    url: https://github.com/Stars76/sisyphus-focus/discussions
+    about: 用法疑问、经验分享和一般性讨论请发到 Discussions，不要开 issue。
+  - name: 安全漏洞（私密报告）
+    url: https://github.com/Stars76/sisyphus-focus/security/advisories/new
+    about: 请勿公开讨论可被利用的漏洞，走私密报告流程。

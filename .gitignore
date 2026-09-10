@@ -1,0 +1,28 @@
+# ---------- 运行时 / 依赖（体积大且可重新下载，不入库） ----------
+electron/
+node_modules/
+dist/
+release/
+
+# ---------- 本地备份（由应用/脚本生成） ----------
+backups/
+*.bak
+*.zip
+
+# ---------- 系统与编辑器 ----------
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# ---------- 临时 ----------
+.tmp/
+tmp/
+
+# ---------- 自检产物 ----------
+tools/smoke-result.json
+tools/smoke-log.txt
+tools/smoke-stdout.txt

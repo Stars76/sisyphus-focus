@@ -1,0 +1,13 @@
+{
+  "win": {
+    "azureSignOptions": {
+      "publisherName": "CN=REPLACE_WITH_YOUR_VERIFIED_PUBLISHER_NAME",
+      "endpoint": "https://REPLACE_WITH_REGION.codesigning.azure.net",
+      "codeSigningAccountName": "REPLACE_WITH_TRUSTED_SIGNING_ACCOUNT",
+      "certificateProfileName": "REPLACE_WITH_CERTIFICATE_PROFILE",
+      "fileDigest": "SHA256",
+      "timestampDigest": "SHA256",
+      "timestampRfc3161": "http://timestamp.acs.microsoft.com"
+    }
+  }
+}

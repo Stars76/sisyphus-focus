@@ -1,0 +1,27 @@
+'use strict';
+const fs=require('fs'),path=require('path'),{spawnSync}=require('child_process');
+const asar=require('@electron/asar'), H=require('./helpers');
+const root=path.resolve(__dirname,'..'),tmp=H.mkTmp('asar-parity'),source=path.join(tmp,'source');
+fs.mkdirSync(source);
+for(const rel of ['src','assets','main.js','preload.js','index.html','package.json']) fs.cpSync(path.join(root,rel),path.join(source,rel),{recursive:true});
+const checker=path.join(root,'tools/check-asar-runtime.js');
+const run=p=>spawnSync(process.execPath,[checker,p],{encoding:'utf8'});
+(async()=>{
+  H.group('Package parity negative checks');
+  H.eq(run(path.join(tmp,'does-not-exist.asar')).status,2,'Missing explicit archive cannot fall back to an old package');
+  const full=path.join(tmp,'full.asar');await asar.createPackage(source,full);
+  H.eq(run(full).status,0,'Matching runtime, CSS and resources pass');
+  const css=path.join(source,'src/todo/style.css'),original=fs.readFileSync(css);
+  fs.unlinkSync(css); const missing=path.join(tmp,'missing-css.asar');await asar.createPackage(source,missing);
+  const missingResult=run(missing);
+  H.eq(missingResult.status,1,'Missing source stylesheet fails parity');
+  H.assert(missingResult.stderr.includes('MISSING src/todo/style.css'),'Failure identifies missing CSS');
+  fs.writeFileSync(css,Buffer.concat([original,Buffer.from('\n/* stale style */\n')]));
+  const changed=path.join(tmp,'changed-css.asar');await asar.createPackage(source,changed);
+  H.eq(run(changed).status,1,'Stale stylesheet fails parity');
+  fs.writeFileSync(css,original);
+  const pkg=JSON.parse(fs.readFileSync(path.join(source,'package.json'),'utf8'));pkg.version='0.0.0';fs.writeFileSync(path.join(source,'package.json'),JSON.stringify(pkg));
+  const oldVersion=path.join(tmp,'old-version.asar');await asar.createPackage(source,oldVersion);
+  H.eq(run(oldVersion).status,1,'Wrong packaged version fails parity');
+  H.finish();
+})().catch(e=>{console.error(e);process.exit(1);});

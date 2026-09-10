@@ -1,0 +1,49 @@
+/* 西西弗斯: shared visual tokens. Blue is reserved for the next action. */
+:root {
+  --paper: #FFFFFF;
+  --surface: #F3F7FC;
+  --blue: #007CFF;
+  --blue-2: #00A1FF;
+  --blue-soft: #91D4FF;
+  --blue-deep: #0066D6;
+  --navy: #002E58;
+  --ink: #122D46;
+  --ink-2: #465E73;
+  --ink-3: #60778B;
+  --ink-4: #708497;
+  --success: #0B6B4F;
+  --success-soft: #EAF7F0;
+  /* 浅蓝体系单一来源：交互浅底 / 下一步描边 / 字符海，禁用裸写相近值 */
+  --accent-soft: #EDF6FF;   /* hover/选中/焦点 浅底（原来散落的 #EDF6FF/#EAF4FF/#EFF8FF/#F7FBFF/#E5EFF9/#E0E9F2） */
+  --accent-veil: #C6E2FF;   /* 「下一步」左边框 / 进度轨 / 淡描边（原 #C6E2FF/#BEDBFA） */
+  --sea: #DCEBFB;           /* 字符海专属，低饱和单值 */
+  --warn: #E08A00;          /* 暂停态琥珀 */
+  --warn-bg: #FFF4E0;
+  --run: #0FA958;           /* 运行中绿 */
+  --line: #DCE6EF;
+  --radius: 12px;
+  --shadow: 0 6px 20px rgba(0,46,88,.07);
+  --k-sans: "Segoe UI Variable Text","Segoe UI","Noto Sans SC","Microsoft YaHei UI","Microsoft YaHei",system-ui,sans-serif;
+  --k-ui: var(--k-sans);
+  --k-num: "Bahnschrift SemiBold","Bahnschrift","Segoe UI Variable Display",var(--k-sans);
+  --k-mono: "Cascadia Mono",Consolas,monospace;
+}
+* { box-sizing: border-box; }
+button, input, select { font: inherit; }
+button { touch-action: manipulation; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 2px solid var(--blue-deep) !important; outline-offset: 3px; }
+input:focus-visible { outline-offset: 1px; }
+sisy-icon { display: inline-block; width: 18px; height: 18px; flex: none; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+::selection { background: #CFE7FF; color: var(--navy); }
+* { scrollbar-width: thin; scrollbar-color: #B6CADA transparent; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .confetti-bit { display: none; }
+}
+@media (forced-colors: active) {
+  button, input { border: 1px solid ButtonText !important; }
+  button[aria-pressed="true"], button[aria-checked="true"] { outline: 2px solid Highlight; }
+}

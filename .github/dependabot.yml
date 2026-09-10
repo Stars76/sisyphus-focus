@@ -1,0 +1,42 @@
+version: 2
+updates:
+  # npm dependencies (devDependencies only — the app has no runtime deps,
+  # and it must stay that way).
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+    commit-message:
+      prefix: "deps"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Electron major upgrades are deliberate: the maintainer bumps them by
+      # hand and re-runs the full gate. Dependabot may still propose minor
+      # and patch updates within the pinned major.
+      #
+      # NOTE: any Electron upgrade (major OR minor/patch) must be paired with
+      # bumping build.electronVersion in package.json — tests/version-sync.test.js
+      # enforces that devDependencies.electron and build.electronVersion stay
+      # aligned, and the run fails when they drift.
+      - dependency-name: "electron"
+        update-types:
+          - "version-update:semver-major"
+
+  # GitHub Actions workflows (.github/workflows/*).
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+    commit-message:
+      prefix: "deps"

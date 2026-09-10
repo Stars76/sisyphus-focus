@@ -1,0 +1,34 @@
+html,body{margin:0;height:100%;overflow:hidden;font-family:var(--k-sans);font-size:14px;color:var(--ink)}
+body{background:var(--surface)}
+.app{height:100vh;display:flex;flex-direction:column}
+.titlebar{flex:none;height:56px;display:flex;align-items:center;gap:20px;padding-left:22px;background:var(--surface);border-bottom:1px solid var(--line);-webkit-app-region:drag;user-select:none}
+.brand{display:flex;align-items:center;gap:8px;font-size:19px;font-weight:800;letter-spacing:-.01em;line-height:1.2;white-space:nowrap;color:var(--navy)}
+.logo{width:24px;height:24px;flex:none;display:block}
+.brand i{font-style:normal;color:var(--blue)}
+.nav{flex:1;display:flex;align-items:center;gap:4px;min-width:0}
+.nav a{-webkit-app-region:no-drag;height:44px;padding:0 18px;border-radius:10px;display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--ink-3);font-size:17px;font-weight:700;white-space:nowrap;transition:background .15s,color .15s}
+.nav a:hover{background:var(--accent-soft);color:var(--navy)}
+.nav a.active{background:var(--paper);color:var(--blue-deep);box-shadow:0 1px 4px #002e5812;border:1px solid var(--line)}
+.nav sisy-icon{width:19px;height:19px}
+.timer-chip{-webkit-app-region:no-drag;display:flex;align-items:center;gap:8px;flex:none;min-height:40px;padding:0 16px;border-radius:99px;background:var(--paper);border:1px solid var(--line);font-size:15px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums;cursor:pointer;white-space:nowrap}
+.timer-chip:hover{border-color:var(--blue)}
+.timer-chip .dot{width:7px;height:7px;border-radius:50%;background:#8BA4B8;flex:none}
+.timer-chip[data-state="running"]{color:var(--success);border-color:#B9DFCF;background:#EDF8F2}
+.timer-chip[data-state="running"] .dot{background:var(--success)}
+.timer-chip[data-state="paused"]{color:#7A4A00;border-color:#E7CEA5;background:#FFF4E0}
+.timer-chip[data-state="paused"] .dot{background:#BC7707}
+.timer-chip[data-state="break"]{color:var(--blue-deep);background:#EDF5FF}
+.timer-chip[data-state="break"] .dot{background:var(--blue)}
+.win-controls{-webkit-app-region:no-drag;display:flex;align-self:stretch}
+.win-controls button{width:40px;border:none;background:transparent;color:var(--ink-2);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.win-controls button:hover{background:var(--accent-soft)}
+.win-controls button.close:hover{background:#C42B35;color:#fff}
+.win-controls svg{width:10px;height:10px;stroke:currentColor;stroke-width:1.2;fill:none}
+.win-controls .max-icon{display:none}
+.win-controls button.maximized .max-icon{display:block}
+.win-controls button.maximized .restore-icon{display:none}
+body:not(.electron) .win-controls{display:none}
+.main{flex:1;min-height:0;position:relative}
+.main iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block}
+
+.chip-task{display:block;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--navy)}

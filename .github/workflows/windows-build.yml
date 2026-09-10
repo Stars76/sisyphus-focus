@@ -1,0 +1,111 @@
+name: Windows Build
+
+on:
+  # 主分支 push 由 continuous-release.yml 负责构建+滚动 Release；
+  # 这里只做 PR 与手动触发的验证（避免同一 push 双重构建）。
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    env:
+      # 未配置证书时这两个值为空，签名自动跳过（构建仍产出可运行的未签名产物）
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      # 无 GPU 的 runner 上让 Electron 走软件渲染（脚本内部也会读 CI 变量加开关）
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Electron / electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        # CI 走官方源（仓库根 .npmrc 给本机配的是国内镜像；官方 runner 上官方源更稳）
+        run: npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
+
+      - name: Gates (static checks + self-test + regression suites)
+        run: npm run verify
+
+      - name: Electron smoke (dual-window sync, 120fps target)
+        shell: pwsh
+        # runner 上偶发的 GPU/窗口抖动不值得整条流水线变红：允许重试一次，
+        # 两次都失败才算失败，失败产物在下方诊断步骤里上传。
+        run: |
+          for ($i = 1; $i -le 2; $i++) {
+            npm run smoke
+            if ($LASTEXITCODE -eq 0) { Write-Host "smoke passed (attempt $i)"; exit 0 }
+            Write-Host "smoke attempt $i failed with exit $LASTEXITCODE"
+            Start-Sleep -Seconds 5
+          }
+          Write-Host "smoke failed twice"
+          exit 1
+
+      - name: Build portable + NSIS (CI path is pure ASCII)
+        run: npx electron-builder --win portable nsis
+
+      - name: Packaged source parity
+        run: node tools/check-asar-runtime.js release/win-unpacked/resources/app.asar
+
+      - name: Real Electron workflow and layout review (isolated userData)
+        run: npx electron tools/ui-review.cjs after
+
+      - name: Signature status
+        shell: pwsh
+        run: |
+          if ($env:CSC_LINK) { ./build/check-signature.ps1 -RequireSigned } else { ./build/check-signature.ps1 }
+
+      - name: Artifact manifest
+        shell: pwsh
+        run: |
+          Get-ChildItem release -Filter *.exe | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash
+            Write-Host ("{0}  {1:N1} MB  sha256:{2}" -f $_.Name, ($_.Length / 1MB), $h)
+          }
+          if (-not (Get-ChildItem release -Filter *.exe)) { throw 'no artifacts produced' }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sisyphus-windows-x64
+          path: |
+            release/*.exe
+            release/*.yml
+          if-no-files-found: error
+
+      - name: Upload smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sisyphus-smoke-diagnostics
+          path: |
+            tools/smoke-result.json
+            tools/smoke-log.txt
+            tools/smoke-stdout.txt
+          if-no-files-found: ignore
+
+      - name: Upload UI review diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sisyphus-ui-review-diagnostics
+          path: .tmp/ui-review-out/**
+          if-no-files-found: ignore

@@ -1,0 +1,109 @@
+name: Continuous Release
+
+# 每次 push 到主分支：构建 portable + NSIS，并更新到同一个滚动 Release（tag: continuous），
+# 始终保持「最新代码的最新包」。打 v* tag 的正式版本见 release.yml。
+# 只有文档/模板类改动时跳过（滚动包代表上一次构建后的代码，Release 说明里带 commit）。
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.gitignore'
+      - '.gitattributes'
+      - '.editorconfig'
+
+permissions:
+  contents: write
+
+jobs:
+  continuous-release:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cache Electron / electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        # CI 走官方源（仓库根 .npmrc 给本机配的是国内镜像；官方 runner 上官方源更稳）
+        run: npm ci --no-audit --no-fund --registry=https://registry.npmjs.org
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build (gates + parity + portable/nsis)
+        shell: pwsh
+        run: ./build/win-build.ps1
+
+      - name: Verify signature status
+        shell: pwsh
+        run: |
+          if ($env:CSC_LINK) { ./build/check-signature.ps1 -RequireSigned } else { ./build/check-signature.ps1 }
+
+      - name: Write SHA256SUMS.txt
+        shell: pwsh
+        run: |
+          Remove-Item release/SHA256SUMS.txt -ErrorAction SilentlyContinue
+          Get-ChildItem release -Filter *.exe | ForEach-Object {
+            $h = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash
+            "$h  $($_.Name)" | Out-File -Append release/SHA256SUMS.txt -Encoding ascii
+          }
+          Get-Content release/SHA256SUMS.txt
+
+      # 先把 continuous tag 强制移到本次 commit，确保 release 指向最新代码；
+      # 再以 overwrite 重建同一个 Rolling Release（软props 会删除旧 release 后重建）。
+      - name: Move continuous tag to this commit
+        shell: pwsh
+        run: |
+          git tag -f continuous
+          git push origin continuous --force
+
+      - name: Publish rolling GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: continuous
+          name: Sisyphus continuous
+          body: |
+            Rolling build for commit `${{ github.sha }}` on `${{ github.ref_name }}` (version ${{ steps.version.outputs.version }}).
+
+            自动滚动 Release — 每次 push 到主分支都会用最新代码重新构建并覆盖此包，始终提供最新产物。
+            产物未做代码签名时 Windows SmartScreen 会提示「未知发布者」；完整性请对照 `SHA256SUMS.txt`。
+            Always-up-to-date continuous build. For versioned releases, see the `v*` tags.
+          draft: false
+          prerelease: false
+          overwrite: true
+          files: |
+            release/*.exe
+            release/SHA256SUMS.txt
+
+      - name: Upload UI review diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sisyphus-continuous-diagnostics
+          path: .tmp/ui-review-out/**
+          if-no-files-found: ignore

@@ -1,0 +1,105 @@
+{
+  "name": "sisyphus-focus",
+  "productName": "Sisyphus",
+  "version": "2.0.0",
+  "description": "西西弗斯 · 专注工作台：本地优先的 Windows 桌面专注工具（今日事任务管理 + 字符海专注钟），无网络请求、无遥测",
+  "main": "main.js",
+  "author": {
+    "name": "GenZ",
+    "email": "entropicechoc@gmail.com"
+  },
+  "license": "MIT",
+  "private": true,
+  "homepage": "https://github.com/Stars76/sisyphus-focus#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Stars76/sisyphus-focus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Stars76/sisyphus-focus/issues"
+  },
+  "keywords": [
+    "electron",
+    "focus",
+    "pomodoro",
+    "timer",
+    "todo",
+    "task-manager",
+    "productivity",
+    "windows",
+    "desktop-app",
+    "local-first",
+    "offline",
+    "no-telemetry",
+    "privacy"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node tools/launch.js",
+    "compact": "node tools/launch.js --compact-timer",
+    "check": "node tools/check-syntax.js",
+    "check:links": "node tools/check-links.js",
+    "test": "node tools/selftest.js",
+    "test:regression": "node tests/run-all.js",
+    "verify": "node tools/check-syntax.js && node tools/check-links.js && node tools/selftest.js && node tests/run-all.js",
+    "test:all": "npm run verify",
+    "smoke": "electron smoke.js",
+    "verify:signature": "powershell -NoProfile -ExecutionPolicy Bypass -File build/check-signature.ps1",
+    "dist": "electron-builder --win portable",
+    "dist:nsis": "electron-builder --win nsis",
+    "dist:all": "electron-builder --win portable nsis"
+  },
+  "devDependencies": {
+    "@electron/asar": "^3.2.18",
+    "electron": "^33.4.11",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.sisyphus.studio",
+    "productName": "Sisyphus",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "package.json",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "asar": true,
+    "electronVersion": "33.4.11",
+    "npmRebuild": false,
+    "publish": null,
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "signtoolOptions": {
+        "signingHashAlgorithms": ["sha256"],
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
+    },
+    "portable": {
+      "requestExecutionLevel": "user",
+      "artifactName": "Sisyphus-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "西西弗斯",
+      "uninstallDisplayName": "西西弗斯",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Sisyphus-${version}-setup.${ext}"
+    }
+  }
+}

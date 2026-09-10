@@ -1,0 +1,85 @@
+name: 🐛 问题报告
+description: 报告西西弗斯（Sisyphus）的缺陷或异常行为
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 应用版本号（⚙ 设置 → 数据备份 里可见）
+      placeholder: "例如：2.0.1"
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows 版本
+      description: 可用 `winver` 查看，如 Windows 11 23H2 (22631.4460)
+      placeholder: "例如：Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-type
+    attributes:
+      label: 安装方式
+      options:
+        - 安装版（NSIS）
+        - 免安装（portable）
+        - 从源码运行
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 一步步写清楚，能照着做出来最好
+      placeholder: |
+        1. 打开专注钟，设置 25 分钟
+        2. ……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你认为应该发生什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 实际发生了什么，越具体越好
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 诊断信息
+      description: ⚙ 设置 → 数据备份 → 复制诊断信息（即 `app:info` 输出）贴到这里。请注意这里不要贴任务正文。
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如有助于说明，可贴截图或录屏链接（可选）
+    validations:
+      required: false
+
+  - type: textarea
+    id: other
+    attributes:
+      label: 其它
+      description: 其它补充信息，比如之前是否正常、何时开始出现（可选）
+    validations:
+      required: false

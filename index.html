@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 本地页面：只允许同目录资源，禁止任何网络连接与远程代码（见 SECURITY.md） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; font-src 'self' file: data:; media-src 'self' file:; connect-src 'none'; object-src 'none'; frame-src 'self' file:; worker-src 'none'; base-uri 'none'; form-action 'none'">
+<title>西西弗斯</title>
+<link rel="stylesheet" href="src/shared/studio.css">
+<link rel="stylesheet" href="src/shell.css">
+</head>
+<body>
+<div class="app">
+  <div class="titlebar" id="titlebar">
+    <div class="brand"><img class="logo" src="assets/icon.png" alt="" aria-hidden="true"><span class="brand-name">西西弗<i>斯</i></span></div>
+    <nav class="nav" aria-label="工作区">
+      <a href="#" class="active" aria-current="page" data-target="todo"><sisy-icon name="ListIcon"></sisy-icon>今日事</a>
+      <a href="#" data-action="popup"><sisy-icon name="TimerIcon"></sisy-icon>专注钟</a>
+    </nav>
+    <button class="timer-chip" id="timerChip" data-state="idle" title="点击打开专注钟">
+      <i class="dot"></i><span id="shellTask" class="chip-task" hidden></span><span id="timerChipText">待机中</span>
+    </button>
+    <div class="win-controls">
+      <button id="btnMin" title="最小化">
+        <svg viewBox="0 0 10 10"><line x1="0" y1="5" x2="10" y2="5"/></svg>
+      </button>
+      <button id="btnMax" title="最大化 / 还原">
+        <svg class="restore-icon" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" rx="1"/></svg>
+        <svg class="max-icon" viewBox="0 0 10 10">
+          <rect x="0.5" y="2.5" width="7" height="7" rx="1"/>
+          <path d="M2.5 2.5 V1 a0.5 0.5 0 0 1 .5-.5 h6 a0.5 0.5 0 0 1 .5.5 v6 a0.5 0.5 0 0 1 -.5.5 H7.5"/>
+        </svg>
+      </button>
+      <button id="btnClose" class="close" title="关闭">
+        <svg viewBox="0 0 10 10"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="main">
+    <iframe id="frame" title="今日事工作区" src="src/todo/index.html"></iframe>
+  </div>
+</div>
+<script src="src/shared/log.js"></script>
+<script src="src/shared/date.js"></script>
+<script src="src/shared/storage.js"></script>
+<script src="src/shared/icons.js"></script>
+<script>
+(function(){
+  "use strict";
+  var NS = window.DSH || {};
+  var log = NS.log;
+  var api = window.dshWindow;
+  if(api) document.body.classList.add('electron');
+
+  /* ---------- 导航：今日事切换视图；专注钟弹出小窗（浏览器回退为切视图） ---------- */
+  var links=document.querySelectorAll('.nav a');
+  var frame=document.getElementById('frame');
+  links.forEach(function(a){
+    a.addEventListener('click',function(e){
+      e.preventDefault();
+      if(a.dataset.action==='popup'){
+        if(api && api.openTimerCompact){ api.openTimerCompact(); return; }  // 桌面版：弹小窗，主窗仍是今日事
+        frame.src='src/timer/index.html';                                    // 浏览器：回退为切换视图
+      } else {
+        frame.src='src/'+a.dataset.target+'/index.html';
+      }
+      links.forEach(function(x){x.classList.remove('active'); x.removeAttribute('aria-current');});
+      a.classList.add('active');
+      a.setAttribute('aria-current','page');
+      frame.title = a.dataset.action === 'popup' ? '专注钟工作区' : '今日事工作区';
+    });
+  });
+
+  /* ---------- 窗口控制（仅 Electron 环境生效） ---------- */
+  if(api){
+    document.getElementById('btnMin').addEventListener('click',function(){api.minimize();});
+    var btnMax=document.getElementById('btnMax');
+    btnMax.addEventListener('click',function(){api.toggleMaximize();});
+    document.getElementById('btnClose').addEventListener('click',function(){api.close();});
+    if(api.isMaximized) api.isMaximized().then(function(m){btnMax.classList.toggle('maximized',!!m);}).catch(function(e){if(log)log.warn('读取最大化状态失败',e);});
+    if(api.onState) api.onState(function(s){btnMax.classList.toggle('maximized',!!(s&&s.maximized));});
+    /* 双击标题栏空白处切换最大化 */
+    document.getElementById('titlebar').addEventListener('dblclick',function(e){
+      if(e.target.closest('.nav')||e.target.closest('.win-controls')||e.target.closest('.timer-chip'))return;
+      api.toggleMaximize();
+    });
+  }
+
+  /* ---------- 标题栏实时计时状态（主进程唯一状态） ---------- */
+  var chip=document.getElementById('timerChip');
+  var chipText=document.getElementById('timerChipText');
+  var hint=document.getElementById('hintText');
+  var closeBtn=document.getElementById('btnClose');
+
+  function fmt(sec){
+    sec=Math.max(0,Math.round(sec));
+    var m=Math.floor(sec/60), s=sec%60;
+    return (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+  }
+
+  function renderChip(snap){
+    if(!snap) return;
+    var t=snap.timer, p=snap.prefs;
+    var state='idle', text='待机中';
+    if(t.phase!=='focus'){
+      state='break';
+      text=(t.phase==='short'?'短休息':'长休息')+' · '+fmt(t.leftSec);
+      if(!t.running && !t.idle) text='休息已暂停 · '+fmt(t.leftSec);
+    } else if(t.running){
+      state='running';
+      text=(t.recovered?'恢复中':'专注中')+' · '+fmt(t.leftSec);
+    } else if(t.paused){
+      state='paused';
+      text='已暂停 · '+fmt(t.leftSec);
+    }
+    chip.dataset.state=state;
+    chipText.textContent=text;
+    var taskLabel = document.getElementById('shellTask');
+    taskLabel.hidden = !t.task;
+    taskLabel.textContent = t.task ? t.task.title : '';
+    taskLabel.title = t.task ? t.task.title : '';
+    chip.title='点击打开专注钟';
+    if(closeBtn) closeBtn.title = p.closeToTray ? '关闭（会留在系统托盘继续计时）' : '关闭';
+    if(hint) hint.textContent = '数据保存在本机 · 在「设置与备份」中导出';
+  }
+
+  if(window.dshTimer){
+    chip.addEventListener('click',function(){ if(api&&api.openTimerCompact) api.openTimerCompact(); });
+    var lastSnap=null;
+    window.dshTimer.onState(function(s){
+      if(!s) return;
+      // 轻量 tick 只带 timer 的剩余字段，合并进最近完整快照
+      if(s.tick===true&&lastSnap){ Object.keys(s.timer).forEach(function(k){ lastSnap.timer[k]=s.timer[k]; }); renderChip(lastSnap); return; }
+      lastSnap=s; renderChip(s);
+    });
+    window.dshTimer.getState().then(function(s){ lastSnap=s; renderChip(s); }).catch(function(e){if(log)log.warn('获取计时状态失败',e);});
+  } else {
+    chip.style.display='none';
+  }
+
+  /* ---------- 状态栏时钟 ---------- */
+  function updateClock(){
+    var clock=document.getElementById('clock');
+    if(!clock) return;
+    var d=new Date();
+    var s=(d.getMonth()+1)+'月'+d.getDate()+'日 '
+      +['日','一','二','三','四','五','六'][d.getDay()]+' '
+      +String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    clock.textContent=s;
+  }
+  updateClock();setInterval(updateClock,30000);
+
+  if(NS.store) NS.store.init();
+  if(log) log.info('主窗已启动');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 本地页面：只允许同目录资源，禁止任何网络连接与远程代码（见 SECURITY.md） -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data:; font-src 'self' file: data:; media-src 'self' file:; connect-src 'none'; object-src 'none'; frame-src 'self' file:; worker-src 'none'; base-uri 'none'; form-action 'none'">
+<title>专注钟 · 纵向字符海</title>
+<link rel="stylesheet" href="../shared/studio.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="card" id="timer-app">
+
+  <canvas id="flow"></canvas>
+
+  <!-- 紧凑小窗标题栏（仅 ?compact=1 独立窗口显示） -->
+  <div class="wbar" id="wbar">
+    <span class="wbar-title"><b>专注</b><i>钟</i></span>
+    <span class="wbar-spacer"></span>
+    <button class="wbar-btn" id="setBtn" title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded="false"><sisy-icon name="SettingsIcon"></sisy-icon></button>
+    <button class="wbar-btn" id="pinBtn" title="置顶" aria-label="切换置顶"><sisy-icon name="PinIcon"></sisy-icon></button>
+    <button class="wbar-btn wbar-close" id="wcloseBtn" title="关闭小窗" aria-label="关闭"><sisy-icon name="CloseIcon"></sisy-icon></button>
+  </div>
+
+  <!-- 设置面板（⚙ 打开） -->
+  <div class="set-panel" id="setPanel" aria-label="专注钟设置" hidden>
+    <div class="panel-heading"><b>专注钟设置</b><button class="wbar-btn" id="closeSettings" type="button" aria-label="关闭设置"><sisy-icon name="CloseIcon"></sisy-icon></button></div>
+    <label class="set-row"><span>提示音</span><button class="set-toggle" id="setSound" aria-label="提示音" type="button" role="switch"></button></label>
+    <label class="set-row"><span>系统通知</span><button class="set-toggle" id="setNotify" aria-label="系统通知" type="button" role="switch"></button></label>
+    <div class="set-row"><span>动画</span>
+      <div class="set-seg" id="setMotion">
+        <button type="button" data-m="full">流畅</button>
+        <button type="button" data-m="calm">舒缓</button>
+        <button type="button" data-m="off">关闭</button>
+      </div>
+    </div>
+    <label class="set-row"><span>高对比度</span><button class="set-toggle" id="setHC" aria-label="高对比度" type="button" role="switch"></button></label>
+    <label class="set-row"><span>显示秒</span><button class="set-toggle" id="setSeconds" aria-label="显示秒" type="button" role="switch"></button></label>
+    <div class="set-sep"></div>
+    <label class="set-row"><span>托盘常驻</span><button class="set-toggle" id="setTray" aria-label="托盘常驻" type="button" role="switch"></button></label>
+    <label class="set-row"><span>关闭主窗时留在托盘</span><button class="set-toggle" id="setCloseTray" aria-label="关闭主窗时留在托盘" type="button" role="switch"></button></label>
+    <div class="set-sep"></div>
+    <div class="set-hint" id="setHint">在今日事的「设置与备份」中导出或导入数据。</div>
+  </div>
+
+  <header>
+    <h1 class="title">专注<i>钟</i></h1>
+    <span class="ver" id="verText"></span>
+  </header>
+
+  <div class="task-name" id="activeTaskName" hidden></div>
+  <div class="field" id="field">
+    <div class="center">
+      <div class="time" id="timeText">25:00</div>
+    </div>
+  </div>
+
+  <div class="setup" id="setupPanel" aria-label="本轮时长" hidden>
+    <div class="panel-heading"><b>本轮时长</b><button class="wbar-btn" id="closeSetup" type="button" aria-label="关闭时长设置"><sisy-icon name="CloseIcon"></sisy-icon></button></div>
+    <p class="setup-hint">选择专注分钟数</p>
+    <div class="seg" id="phaseRow">
+      <button data-phase="focus" data-min="5" aria-pressed="false">5</button>
+      <button data-phase="focus" data-min="10" aria-pressed="false">10</button>
+      <button data-phase="focus" data-min="15" aria-pressed="false">15</button>
+      <button data-phase="focus" data-min="25" aria-pressed="true">25</button>
+      <button data-phase="focus" data-min="45" aria-pressed="false">45</button>
+    </div>
+    <div class="seg" id="breakRow" style="margin-top:6px;">
+      <button data-phase="short" aria-pressed="false">短休 5 分钟</button>
+      <button data-phase="long" aria-pressed="false">长休 15 分钟</button>
+    </div>
+    <div class="custom">
+      <label for="customMin">自定义</label>
+      <input id="customMin" type="number" min="1" max="180" step="1" placeholder="分钟" aria-describedby="customHint">
+      <button class="btn-ghost" id="applyCustomMin" type="button">应用</button>
+    </div>
+    <p class="setup-hint" id="customHint" role="status">1–180 分钟，按自己的节奏来。</p>
+  </div>
+
+  <!-- 底部状态栏：状态 + 今日统计 + 操作按钮（一行） -->
+  <div class="dock">
+    <div class="dock-row" aria-live="polite">
+      <span class="chip" id="stateChip" data-state="idle"><i class="dot"></i><span id="stateText">待机中</span></span>
+      <div class="dock-btns">
+        <button class="btn-ghost" id="setupBtn" type="button" aria-haspopup="dialog" aria-expanded="false">25 分钟</button>
+        <button class="btn-primary" id="startBtn" type="button">开始</button>
+        <button class="btn-ghost" id="resetBtn" type="button" hidden>重置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 专注完成 · 成就界面 -->
+  <div class="done-screen" id="doneScreen" aria-labelledby="doneTitle" hidden>
+    <div class="done-card">
+      <div class="done-emoji" id="doneEmoji">🎉</div>
+      <div class="done-title" id="doneTitle">专注完成！</div>
+      <div class="done-sub" id="doneSub"></div>
+      <details class="done-record"><summary>查看本轮记录</summary><div class="done-detail" id="doneDetail"></div></details>
+      <div class="done-again" id="doneActions">
+        <button class="btn-primary" id="doneAgain" type="button">再来一轮</button>
+        <button class="btn-ghost" id="doneBreak" type="button">休息 5 分钟</button>
+        <button class="btn-ghost" id="doneEnd" type="button">返回专注钟</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/log.js"></script>
+<script src="../shared/date.js"></script>
+<script src="../shared/storage.js"></script>
+<script src="../shared/toast.js"></script>
+<script src="../shared/icons.js"></script>
+<script src="../shared/dialog.js"></script>
+<script src="state.js"></script>
+<script src="flow.js"></script>
+<script src="audio.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
