@@ -16,12 +16,14 @@ const { createStore } = require('./src/main/store');
 const { createTimer } = require('./src/main/timer');
 const { createTray } = require('./src/main/tray');
 const { createIpc } = require('./src/main/ipc');
+const { createAlarm } = require('./src/main/alarm');
 const util = require('./src/main/util');
 
 let win = null;        // 主窗口
 let timerWin = null;   // 专注钟紧凑小窗
 let store = null;
 let timer = null;
+let alarm = null;
 let tray = null;
 let ipc = null;
 let isQuitting = false;
@@ -291,6 +293,19 @@ app.whenReady().then(() => {
     onQuit: () => { isQuitting = true; app.quit(); }
   });
 
+  alarm = createAlarm({
+    store: store,
+    log: log,
+    date: util,
+    notify: (title, body) => {
+      try {
+        if (Notification.isSupported()) {
+          new Notification({ title: title, body: body, silent: true }).show();
+        }
+      } catch (e) { log('闹钟系统通知失败', e); }
+    }
+  });
+
   ipc = createIpc({
     store: store,
     timer: timer,
@@ -304,6 +319,7 @@ app.whenReady().then(() => {
   ipc.register();
 
   timer.init();
+  alarm.start();
 
   if (launchCompactOnly) createTimerWindow();
   else createWindow();

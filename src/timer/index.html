@@ -56,13 +56,17 @@
     </div>
   </div>
 
-  <div class="setup" id="setupPanel" aria-label="本轮时长" hidden>
-    <div class="panel-heading"><b>本轮时长</b><button class="wbar-btn" id="closeSetup" type="button" aria-label="关闭时长设置"><sisy-icon name="CloseIcon"></sisy-icon></button></div>
-    <p class="setup-hint">选择专注分钟数</p>
+  <div class="setup" id="setupPanel" aria-label="专注计划" hidden>
+    <div class="panel-heading"><b>选择专注计划</b><button class="wbar-btn" id="closeSetup" type="button" aria-label="关闭计划选择"><sisy-icon name="CloseIcon"></sisy-icon></button></div>
+    <p class="setup-hint">多轮番茄计划：专注 → 短休 → … → 长休，全程自动推进</p>
+    <div class="plan-grid" id="planRow">
+      <button type="button" class="plan-card" data-plan="classic" aria-pressed="false"><b>标准番茄</b><span>25 专注 + 5 短休 ×4 轮</span></button>
+      <button type="button" class="plan-card" data-plan="deep" aria-pressed="false"><b>深专注</b><span>45 专注 + 5 短休 ×2 轮</span></button>
+      <button type="button" class="plan-card" data-plan="sprint" aria-pressed="false"><b>短冲刺</b><span>15 专注 + 3 短休 ×4 轮</span></button>
+      <button type="button" class="plan-card" data-plan="marathon" aria-pressed="false"><b>长跑</b><span>50 专注 + 10 短休 ×2 轮</span></button>
+    </div>
+    <p class="setup-hint" style="margin-top:12px;">或选单段专注</p>
     <div class="seg" id="phaseRow">
-      <button data-phase="focus" data-min="5" aria-pressed="false">5</button>
-      <button data-phase="focus" data-min="10" aria-pressed="false">10</button>
-      <button data-phase="focus" data-min="15" aria-pressed="false">15</button>
       <button data-phase="focus" data-min="25" aria-pressed="true">25</button>
       <button data-phase="focus" data-min="45" aria-pressed="false">45</button>
     </div>
@@ -75,7 +79,7 @@
       <input id="customMin" type="number" min="1" max="180" step="1" placeholder="分钟" aria-describedby="customHint">
       <button class="btn-ghost" id="applyCustomMin" type="button">应用</button>
     </div>
-    <p class="setup-hint" id="customHint" role="status">1–180 分钟，按自己的节奏来。</p>
+    <p class="setup-hint" id="customHint" role="status">1–180 分钟，按自己的节奏来。选好计划或时长后点「开始」。</p>
   </div>
 
   <!-- 底部状态栏：状态 + 今日统计 + 操作按钮（一行） -->

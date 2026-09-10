@@ -38,6 +38,28 @@ const DEFAULT_PREFS = {
   phases: { focus: 25 * 60, short: 5 * 60, long: 15 * 60 }
 };
 
+/**
+ * 多轮专注计划（番茄工作法预设）。
+ * 展开后自动按「专注 → 短休 → …… → 专注 → 长休」推进，直到计划结束。
+ * rounds 指专注轮数；每轮之间短休，最后一轮后接长休。
+ */
+const DEFAULT_PLANS = [
+  { key: 'classic', name: '标准番茄', rounds: 4, focus: 25, short: 5, long: 15 },
+  { key: 'deep', name: '深专注', rounds: 2, focus: 45, short: 5, long: 15 },
+  { key: 'sprint', name: '短冲刺', rounds: 4, focus: 15, short: 3, long: 10 },
+  { key: 'marathon', name: '长跑', rounds: 2, focus: 50, short: 10, long: 20 }
+];
+
+function expandPlan(def) {
+  const steps = [];
+  for (let i = 0; i < def.rounds; i++) {
+    steps.push({ phase: 'focus', sec: def.focus * 60 });
+    if (i < def.rounds - 1) steps.push({ phase: 'short', sec: def.short * 60 });
+  }
+  if (def.long) steps.push({ phase: 'long', sec: def.long * 60 });
+  return steps;
+}
+
 const TICK_MS = 250;
 const PERSIST_EVERY_MS = 5000;
 const CLOCK_JUMP_MS = 5000;
@@ -181,7 +203,9 @@ function createTimer(deps) {
       round: stats.rounds + 1,  // 当前是今日第几轮（专注阶段）
       abandoned: false,
       recovered: false,
-      task: null
+      task: null,
+      plan: null,
+      awaitPlan: false
     };
   }
 
@@ -195,6 +219,15 @@ function createTimer(deps) {
     t.pauseStartedAt = 0;
     t.startedAt = (typeof raw.startedAt === 'string') ? raw.startedAt : null;
     t.task = raw.phase === 'focus' && t.startedAt && raw.task ? Object.assign({}, raw.task) : null;
+    // 恢复多轮计划（schema 已校验形状）
+    if (raw.plan && Array.isArray(raw.plan.steps) && raw.plan.steps.length) {
+      t.plan = {
+        key: raw.plan.key,
+        name: raw.plan.name,
+        steps: raw.plan.steps.map(function (s) { return { phase: s.phase, sec: s.sec }; }),
+        index: Math.min(Math.max(0, raw.plan.index | 0), raw.plan.steps.length - 1)
+      };
+    }
     t.abandoned = !!raw.abandoned;
     t.round = Math.max(1, Math.round(num(raw.round, stats.rounds + 1)));
 
@@ -241,7 +274,8 @@ function createTimer(deps) {
       startedAt: t.startedAt, pauseCount: t.pauseCount, pausedMs: Math.round(t.pausedMs),
       pauseStartedAt: t.pauseStartedAt || 0,
       round: t.round, abandoned: t.abandoned, updatedAt: new Date(t0).toISOString(),
-      task: t.task
+      task: t.task,
+      plan: t.plan
     });
     if (!r.ok) log('保存计时状态失败', r.error);
     // 兼容旧版本读取
@@ -293,6 +327,7 @@ function createTimer(deps) {
     const t = timer;
     if (on === t.running) return;
     if (on) {
+      t.awaitPlan = false;                 // 一开跑就摘掉「等待选计划」标记
       if (!t.startedAt) t.startedAt = new Date(now()).toISOString();
       if (t.leftMs <= 0) t.leftMs = t.totalSec * 1000;
       t.startMono = mono();
@@ -374,9 +409,43 @@ function createTimer(deps) {
       ,taskTitle: activeTask && activeTask.title
     };
 
-    // 回到未开始状态（下一轮号）
+    // 多轮计划：还有下一段就自动推进（番茄法连循环自动跑到底）
+    const plan = timer.plan;
+    const advancing = !silent && plan && plan.index + 1 < plan.steps.length;
+    if (advancing) {
+      const nextIndex = plan.index + 1;
+      const step = plan.steps[nextIndex];
+      const nt = newTimer(step.phase);
+      nt.totalSec = step.sec;
+      nt.leftMs = step.sec * 1000;
+      nt.plan = { key: plan.key, name: plan.name, steps: plan.steps, index: nextIndex };
+      nt.task = activeTask;
+      nt.round = stats.rounds + 1;
+      nt.startedAt = new Date(now()).toISOString();
+      nt.startMono = mono(); nt.leftAtStartMs = nt.leftMs; nt.endAt = now() + nt.leftMs; nt.running = true;
+      timer = nt;
+      persist(true);
+      appendHistory({
+        day: payload.day, phase: phase, startedAt: payload.startedAt, finishedAt: payload.finishedAt,
+        plannedMinutes: payload.plannedMinutes, actualMinutes: payload.actualMinutes,
+        pauseCount: payload.pauseCount, pausedMinutes: Math.round(payload.pausedMs / 60000),
+        result: 'done', taskId: activeTask && activeTask.id,
+        taskDay: activeTask && activeTask.day, taskTitle: activeTask && activeTask.title
+      });
+      broadcast();
+      onEvent({ type: 'plan-advance', name: plan.name, index: nextIndex, total: plan.steps.length, phase: step.phase, minutes: Math.round(step.sec / 60) });
+      if (prefs.notify) {
+        notify(step.phase === 'focus' ? '🔔 该专注了' : '☕ 休息一下',
+          plan.name + ' · ' + (nextIndex + 1) + '/' + plan.steps.length + ' · ' + (step.phase === 'focus' ? '专注' : '休息') + ' ' + Math.round(step.sec / 60) + ' 分钟');
+      }
+      log('计划自动推进', plan.name, (nextIndex + 1) + '/' + plan.steps.length, step.phase);
+      return;
+    }
+
+    // 计划完成（最后一轮 / 单段模式）：回到未开始状态，清掉计划
     const keepPhase = phase;
     timer = newTimer(keepPhase);
+    timer.plan = null;
     timer.round = stats.rounds + 1;
     persist(true);
     appendHistory({
@@ -435,6 +504,7 @@ function createTimer(deps) {
     };
     log('放弃本轮', phase, plannedMin + 'min');
     timer = newTimer(phase);
+    timer.plan = null;
     timer.round = stats.rounds + 1;
     persist(true);
     appendHistory({
@@ -467,6 +537,7 @@ function createTimer(deps) {
     reset: ['idle', 'running', 'paused'],
     setPhase: ['idle', 'running', 'paused'],   // running/paused 中切阶段 = 先记一次放弃
     setDuration: ['idle', 'running', 'paused'],// 同上
+    applyPlan: ['idle', 'running', 'paused'],  // 同上：切换多轮计划
     abandon: ['running', 'paused'],   // 只有开始过的轮次能放弃
     resetToday: ['idle', 'running', 'paused'],
     refresh: ['idle', 'running', 'paused']
@@ -512,6 +583,8 @@ function createTimer(deps) {
       fresh.pauseStartedAt = 0;
       fresh.abandoned = false;
       fresh.recovered = false;
+      fresh.plan = null;
+      fresh.awaitPlan = false;
       persist(true);
       broadcast();
     },
@@ -526,6 +599,7 @@ function createTimer(deps) {
         try { abandon(); } finally { rejecting = false; }
       }
       timer = newTimer(phase);
+      timer.plan = null;
       timer.round = stats.rounds + 1;
       persist(true);
       broadcast();
@@ -547,10 +621,32 @@ function createTimer(deps) {
         timer = newTimer('focus');
         timer.totalSec = sec;
         timer.leftMs = sec * 1000;
+        timer.plan = null;
         timer.round = stats.rounds + 1;
       }
       persist(true);
       broadcast();
+    },
+    /** 应用一个多轮计划（番茄法预设）：整段队列待跑，不自动开始（点「开始」开跑） */
+    applyPlan(payload) {
+      if (!canRun('applyPlan')) return;
+      const key = payload && payload.plan;
+      const def = DEFAULT_PLANS.find((p) => p.key === key);
+      if (!def) { reject('applyPlan', '未知计划 ' + String(key).slice(0, 20)); return; }
+      if ((timer.running || timer.startedAt) && !rejecting) {
+        rejecting = true;
+        try { abandon(); } finally { rejecting = false; }
+      }
+      const steps = expandPlan(def);
+      timer = newTimer(steps[0].phase);
+      timer.totalSec = steps[0].sec;
+      timer.leftMs = steps[0].sec * 1000;
+      timer.plan = { key: def.key, name: def.name, steps: steps, index: 0 };
+      timer.awaitPlan = false;             // 用户从选择器选定计划后不再自动弹
+      timer.round = stats.rounds + 1;
+      persist(true);
+      broadcast();
+      onEvent({ type: 'plan-set', key: def.key, name: def.name, steps: steps.length });
     },
     /** 放弃本轮（不计入统计） */
     abandon() {
@@ -662,6 +758,8 @@ function createTimer(deps) {
           abandoned: t.abandoned,
           recovered: t.recovered,
           task: t.task ? Object.assign({}, t.task) : null,
+          awaitPlan: !!t.awaitPlan,
+          plan: t.plan ? { name: t.plan.name, key: t.plan.key, index: t.plan.index, total: t.plan.steps.length, rounds: t.plan.steps.filter(function (s) { return s.phase === 'focus'; }).length } : null,
           progress: t.totalSec > 0 ? clamp(1 - currentLeftMs() / (t.totalSec * 1000), 0, 1) : 0
         }
       };
@@ -673,8 +771,9 @@ function createTimer(deps) {
       catch (e) { log('计时命令异常 ' + type, e); reject(type, '命令异常: ' + ((e && e.message) || e).slice(0, 80)); }
       return api.snapshot();
     },
-    /** One serialized operation: resolve the real task, bind and start (or resume the same task). */
-    startTask(ref) {
+    /** One serialized operation: resolve the real task, bind and start (or resume the same task).
+     *  opts.noStart = true：只绑定任务、进入待开始状态并广播 await-plan（任务侧弹计划选择器），不自动开跑。 */
+    startTask(ref, opts) {
       if (!ref || typeof ref.id !== 'string' || !ref.id || ref.id.length > 128 || typeof ref.day !== 'string' || ref.day !== date.todayKey()) {
         return { ok: false, error: '请选择今天的有效任务。' };
       }
@@ -682,14 +781,24 @@ function createTimer(deps) {
       const day = data && data.days && data.days[ref.day];
       const target = day && Array.isArray(day.tasks) && day.tasks.find(t => t.id === ref.id);
       if (!target || target.done) return { ok: false, error: '任务不存在或已完成，请刷新任务列表。' };
+      const noStart = !!(opts && opts.noStart);
       if (timer.startedAt) {
         const same = timer.phase === 'focus' && timer.task && timer.task.id === ref.id && timer.task.day === ref.day;
         if (!same) return { ok: false, code: 'timer-busy', error: '当前轮次尚未结束。请在专注钟中完成或重置本轮，再切换任务。' };
+        if (noStart) return { ok: true, snapshot: api.snapshot() };
         if (!timer.running) setRunning(true);
         return { ok: true, snapshot: api.snapshot() };
       }
       if (timer.phase !== 'focus') timer = newTimer('focus');
       timer.task = { id: target.id, day: ref.day, title: target.title.slice(0, 500) };
+      timer.plan = null;
+      timer.awaitPlan = !!noStart;
+      persist(true);
+      broadcast();
+      if (noStart) {
+        onEvent({ type: 'await-plan', task: { id: target.id, day: ref.day, title: target.title.slice(0, 500) } });
+        return { ok: true, noStart: true, snapshot: api.snapshot() };
+      }
       setRunning(true);
       return { ok: true, snapshot: api.snapshot() };
     },
@@ -708,4 +817,4 @@ function createTimer(deps) {
   return api;
 }
 
-module.exports = { createTimer, PHASES, STATE_KEY, STATS_KEY, RUN_KEY, PREFS_KEY };
+module.exports = { createTimer, PHASES, DEFAULT_PLANS, expandPlan, STATE_KEY, STATS_KEY, RUN_KEY, PREFS_KEY };

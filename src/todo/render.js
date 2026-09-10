@@ -138,30 +138,51 @@
         title.textContent = task.title;
         title.dataset.act = 'edit'; title.title = '双击修改';
         titleRow.appendChild(title);
-        main.appendChild(titleRow);
 
+        /* 紧凑徽标组：只挤在标题行的最右侧，不单独占一行、不抢任务本体空间 */
+        var badges = document.createElement('span');
+        badges.className = 'task-badges';
         var subs = task.subtasks || [];
         var total = taskTotals[viewKey(task.id)] || 0;
-        if (total) { var credited = document.createElement('div'); credited.className = 'task-meta'; credited.textContent = '已专注 ' + total + ' 分钟'; main.appendChild(credited); }
-        if (subs.length || task.done) {
-          var meta = document.createElement('div');
-          meta.className = 'task-meta';
-          if (subs.length) {
-            var doneCount = subs.filter(function (s) { return s.done; }).length;
-            var mins = subs.reduce(function (a, s) { return a + (s.done ? 0 : (+s.minutes || 0)); }, 0);
-            meta.textContent = doneCount + '/' + subs.length + ' 步 · 剩约 ' + mins + ' 分钟';
-            var nx = null;
-            for (var i = 0; i < subs.length; i++) { if (!subs[i].done) { nx = subs[i]; break; } }
-            if (nx && !task.done) {
-              var b = document.createElement('b');
-              b.textContent = ' · 下一步：' + nx.title;
-              meta.appendChild(b);
-            }
-          } else {
-            meta.textContent = '已完成';
-          }
-          main.appendChild(meta);
+        if (total) {
+          var cr = document.createElement('span');
+          cr.className = 'task-credit';
+          cr.textContent = '⏱ ' + total;
+          cr.title = '本轮专注已计入 ' + total + ' 分钟';
+          badges.appendChild(cr);
         }
+        if (task.done) {
+          var doneBadge = document.createElement('span');
+          doneBadge.className = 'task-step-badge done';
+          doneBadge.textContent = subs.length ? '完成' : '已完成';
+          doneBadge.title = subs.length ? '全部步骤已完成' : '任务已完成';
+          badges.appendChild(doneBadge);
+        } else if (subs.length) {
+          var doneCount = subs.filter(function (s) { return s.done; }).length;
+          var nx = null;
+          for (var i = 0; i < subs.length; i++) { if (!subs[i].done) { nx = subs[i]; break; } }
+          var stepBadge = document.createElement('span');
+          stepBadge.className = 'task-step-badge';
+          stepBadge.textContent = doneCount + '/' + subs.length;
+          stepBadge.title = nx ? ('已完成 ' + doneCount + '/' + subs.length + ' 步 · 下一步：' + nx.title) : ('已完成全部 ' + subs.length + ' 步');
+          badges.appendChild(stepBadge);
+        }
+        if (task.alarm) {
+          var alarm = document.createElement('span');
+          alarm.className = 'task-alarm';
+          alarm.dataset.act = 'alarm-edit';
+          alarm.title = '闹钟 ' + task.alarm + '，点击修改或清除';
+          alarm.setAttribute('role', 'button');
+          alarm.setAttribute('aria-label', '闹钟 ' + task.alarm + '，点击修改或清除');
+          alarm.appendChild(icon('AlarmIcon'));
+          var at = document.createElement('span');
+          at.textContent = task.alarm;
+          alarm.appendChild(at);
+          badges.appendChild(alarm);
+        }
+        if (badges.childNodes.length) titleRow.appendChild(badges);
+
+        main.appendChild(titleRow);
         head.appendChild(main);
 
         var actions = document.createElement('div');
@@ -172,6 +193,7 @@
         }
         if (today && !task.done) actions.appendChild(iconBtn('focus', 'TimerIcon', current ? '继续本轮专注' : '开始专注', 'focus-task'));
         actions.appendChild(iconBtn('addstep', 'AddIcon', '添加小步骤', 'addstep'));
+        actions.appendChild(iconBtn('alarm', 'AlarmIcon', task.alarm ? '修改闹钟' : '设置闹钟', 'hover-only'));
         actions.appendChild(iconBtn('edit', 'EditIcon', '修改', 'hover-only'));
         actions.appendChild(iconBtn('delete', 'DeleteIcon', '删除', 'hover-only'));
         head.appendChild(actions);
@@ -201,12 +223,9 @@
             st.dataset.act = 'subedit'; st.title = '双击修改';
             sli.appendChild(st);
 
-            var sm = document.createElement('button');
-            sm.className = 'subtask-min';
-            sm.type = 'button';
-            sm.textContent = (s.minutes || 5) + ' 分钟';
-            sm.dataset.act = 'minedit'; sm.dataset.sid = s.id; sm.title = '点击修改分钟数';
-            sli.appendChild(sm);
+            var se = iconBtn('subedit', 'EditIcon', '修改步骤', 'hover-only subedit');
+            se.dataset.sid = s.id;
+            sli.appendChild(se);
 
             var sd = iconBtn('subdelete', 'DeleteIcon', '删除', 'hover-only subdel');
             sd.dataset.sid = s.id;
@@ -372,6 +391,7 @@
       input.value = currentText;
       // 标题/步骤文字不设长度上限（只有分钟数输入框限 3 位）
       if (opts.min) { input.maxLength = 3; input.type = 'number'; input.min = '1'; input.max = '180'; }
+      if (opts.alarm) { input.maxLength = 5; input.type = 'text'; input.placeholder = 'HH:MM，如 08:30（清空即取消）'; }
       var committed = false;
       function commit(save) {
         if (committed) return;
@@ -381,6 +401,10 @@
           if (opts.min) {
             var n = Math.round(+v);
             if (n >= 1 && n <= 180) onCommit(n);
+          } else if (opts.alarm) {
+            var re = /^([01]\d|2[0-3]):[0-5]\d$/;
+            if (v && re.test(v)) onCommit(v);
+            else if (!v) onCommit('');        // 清空 = 取消闹钟
           } else if (v) {
             onCommit(v);
           }

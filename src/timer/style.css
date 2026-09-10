@@ -248,3 +248,12 @@
 @container(max-width:260px){.task-name{font-size:11px}.time{font-size:46px}}
 
 .task-name[hidden]{display:none}
+
+/* 多轮番茄计划卡 */
+.plan-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:2px}
+.plan-card{display:flex;flex-direction:column;gap:3px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);cursor:pointer;text-align:left;font:inherit;transition:border-color .15s,background .15s}
+.plan-card b{font-size:13px;color:var(--navy)}
+.plan-card span{font-size:11px;color:var(--ink-3);line-height:1.5}
+.plan-card:hover{border-color:var(--blue)}
+.plan-card[aria-pressed="true"]{border-color:var(--blue-deep);background:var(--accent-soft)}
+.plan-card[aria-pressed="true"] b{color:var(--blue-deep)}

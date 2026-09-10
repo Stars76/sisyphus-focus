@@ -27,6 +27,10 @@ const KEY_RE = /^sisy-[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const PHASE_SET = ['focus', 'short', 'long'];
 const HISTORY_MAX = 300;
+const ALARM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;   // 任务闹钟时刻 HH:MM
+
+/** 多轮专注计划（番茄法）预设键；定义与展开见 src/main/timer.js */
+const PLAN_KEYS = ['classic', 'deep', 'sprint', 'marathon'];
 
 const K = {
   STATE_V2: 'sisy-focus-state-v2',
@@ -98,6 +102,11 @@ function checkTask(t, label, ctx) {
   }
   if (typeof t.dailyId === 'string' && t.dailyId) out.dailyId = t.dailyId;
   if (typeof t.createdAt === 'string') out.createdAt = t.createdAt;
+  // 闹钟：合法 HH:MM 保留；缺失/非法一律丢弃（可修复，不终止任务）
+  if (t.alarm != null) {
+    if (typeof t.alarm === 'string' && ALARM_RE.test(t.alarm)) out.alarm = t.alarm;
+    else ctx.repaired.push(label + '：alarm 非 HH:MM，已丢弃');
+  }
   if (!out.title && !out.subtasks.length) {
     ctx.errors.push(label + '：任务既无标题也无小步骤');
     return null;
@@ -271,7 +280,29 @@ function validateTimerState(value, ctx) {
     out.task = { id: ref.id, day: util.normalizeKey(ref.day), title: ref.title };
   }
   if (typeof value.updatedAt === 'string') out.updatedAt = value.updatedAt;
+  if (value.plan != null) {
+    const p = checkPlan(value.plan, label, ctx);
+    if (p) out.plan = p;
+  }
   return out;
+}
+
+/** 多轮计划：{key,name,steps:[{phase,sec}],index}；非法即剥离（可修复，不终止） */
+function checkPlan(p, label, ctx) {
+  if (!isPlainObject(p) || typeof p.key !== 'string' || !p.key || typeof p.name !== 'string' || p.name.length > 60 ||
+    !Array.isArray(p.steps) || p.steps.length === 0 || p.steps.length > 60) {
+    ctx.repaired.push(label + '：plan 结构非法，已丢弃');
+    return null;
+  }
+  const steps = [];
+  let bad = false;
+  p.steps.forEach(function (s, i) {
+    if (!isPlainObject(s) || PHASE_SET.indexOf(s.phase) === -1 || typeof s.sec !== 'number') { bad = true; return; }
+    steps.push({ phase: s.phase, sec: clampInt(s.sec, 60, 180 * 60, 60) });
+  });
+  if (bad) { ctx.repaired.push(label + '：plan.steps 含非法段，已丢弃'); return null; }
+  const index = clampInt(p.index, 0, steps.length - 1, 0);
+  return { key: p.key.slice(0, 40), name: p.name.slice(0, 60), steps: steps, index: index };
 }
 
 function validateTimerHistory(value, ctx) {
@@ -419,6 +450,8 @@ module.exports = {
   MAX_BUNDLE_BYTES,
   HISTORY_MAX,
   PHASE_SET,
+  ALARM_RE,
+  PLAN_KEYS,
   KEYS: K,
   CLEAR_SCOPES,
   isValidStoreKey,

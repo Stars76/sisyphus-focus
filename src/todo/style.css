@@ -55,14 +55,23 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;fl
 .icon-btn.hover-only{opacity:0}
 .todo-item:hover .icon-btn.hover-only,.todo-item:focus-within .icon-btn.hover-only,.subtask:hover .icon-btn.hover-only,.subtask:focus-within .icon-btn.hover-only{opacity:1}
 .subtasks{list-style:none;margin:12px 0 0 11px;padding:0 0 0 24px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
-.subtask{display:flex;align-items:center;gap:9px;font-size:14px;line-height:1.6;color:var(--ink-2);padding:2px 0}
+.subtask{position:relative;display:flex;align-items:center;gap:9px;font-size:14px;line-height:1.6;color:var(--ink-2);padding:2px 0}
 .subtask .todo-check{width:20px;height:20px;padding:3px}
 .subtask .todo-check sisy-icon{width:11px;height:11px}
 .subtask.done .subtask-title{text-decoration:line-through;text-decoration-color:#B5C5D3;color:var(--ink-3)}
 .subtask-title{flex:1;min-width:0;word-break:break-word;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.subtask-min{flex:none;min-height:28px;font-family:var(--k-mono);font-size:12px;color:var(--ink-3);border:1px solid var(--line);border-radius:6px;padding:1px 8px;background:var(--paper)}
-.subtask-min{cursor:text}
-.subtask-min:hover{border-color:var(--blue);color:var(--blue-deep)}
+/* 子步骤删除/修改按钮与所属主任务的图标同一列（任务行右缘）对齐 */
+.subtask .subdel{position:absolute;right:36px;top:50%;transform:translateY(-50%)}
+.subtask .subedit{position:absolute;right:70px;top:50%;transform:translateY(-50%)}
+.task-alarm{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border:1px solid var(--accent-veil);border-radius:999px;background:var(--accent-soft);color:var(--blue-deep);font-family:var(--k-mono);font-size:11px;font-weight:600;cursor:pointer;line-height:1;white-space:nowrap}
+.task-alarm sisy-icon{width:12px;height:12px}
+.task-alarm:hover{border-color:var(--blue);background:#EAF4FF}
+/* 标题行右侧的紧凑徽标组：不单独占一行，不挤压任务标题 */
+.task-badges{display:inline-flex;align-items:center;gap:6px;flex:none;margin-left:8px}
+.task-step-badge,.task-credit{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1}
+.task-step-badge{background:var(--accent-soft);color:var(--blue-deep)}
+.task-step-badge.done{background:#E7F5EB;color:#1E8E4E}
+.task-credit{background:#EEF3F8;color:var(--ink-2);font-weight:600}
 .edit-input{flex:1;min-width:0;max-width:100%;font:inherit;font-size:17px;line-height:1.5;border:1px solid var(--blue);border-radius:6px;padding:4px 6px;background:#fff;color:var(--ink)}
 .edit-input.sub{font-size:14px}.edit-input.min{flex:none;width:64px;text-align:center;font-family:var(--k-mono);font-size:12px}
 .todo-empty{list-style:none;min-height:180px;height:75%;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;gap:12px;padding:24px}
@@ -108,8 +117,8 @@ header{display:flex;align-items:center;justify-content:space-between;gap:16px;fl
 .diagnostics{margin-top:16px}.diagnostics summary{font-size:12px;color:var(--ink-3);cursor:pointer;padding:8px 0}
 .confetti-bit{position:absolute;width:6px;height:6px;border-radius:2px;pointer-events:none;animation:task-confetti .9s ease-out forwards;z-index:6}
 @keyframes task-confetti{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(220deg)}}
-@container(max-width:540px){header{align-items:flex-start;flex-direction:column;gap:12px}.title{font-size:26px}.daynav{align-self:flex-end}.task-actions .icon-btn{width:28px}.task-head{gap:9px}.task-meta b{display:block}.data-row{align-items:flex-start;flex-direction:column;gap:6px}.footer-note{display:none}.task-title{font-size:15px}.subtasks{padding-left:16px}}
-@container(max-width:340px){.card{--padx:14px}.day-label{font-size:12px}.daynav{gap:0}.task-actions .icon-btn{width:24px}.add-row button{padding:6px 10px}.subtask-min{padding:1px 4px}}
+@container(max-width:540px){header{align-items:flex-start;flex-direction:column;gap:12px}.title{font-size:26px}.daynav{align-self:flex-end}.task-actions .icon-btn{width:28px}.task-head{gap:9px}.data-row{align-items:flex-start;flex-direction:column;gap:6px}.footer-note{display:none}.task-title{font-size:15px}.subtasks{padding-left:16px}}
+@container(max-width:340px){.card{--padx:14px}.day-label{font-size:12px}.daynav{gap:0}.task-actions .icon-btn{width:24px}.add-row button{padding:6px 10px}}
 @media(hover:none){.icon-btn.hover-only{opacity:1}.task-actions{opacity:1;pointer-events:auto}}
 
 .list-filter{border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:4px 10px;color:var(--ink-3);font-size:12px;cursor:pointer}.list-filter[aria-pressed="true"]{border-color:var(--blue);color:var(--blue-deep);background:var(--accent-soft)}.collapse-task sisy-icon{transition:transform .15s}.todo-item.collapsed .collapse-task sisy-icon{transform:rotate(90deg)}.focus-task{color:var(--blue-deep)!important}

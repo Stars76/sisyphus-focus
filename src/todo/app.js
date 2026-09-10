@@ -164,7 +164,8 @@
         refresh();
       } else if (act === 'focus') {
         if (global.dshTimer && global.dshTimer.startTask) {
-          global.dshTimer.startTask({ id: ctx.task.id, day: state.viewDay }).then(function (result) {
+          // 绑定任务但不直接开跑：打开专注钟的计划选择器，让用户先选好时长/轮次
+          global.dshTimer.startTask({ id: ctx.task.id, day: state.viewDay }, { noStart: true }).then(function (result) {
             if (!result.ok) { NS.toast.show(result.error || '无法开始专注', { type: 'warn' }); return; }
             if (global.dshWindow) global.dshWindow.openTimerCompact();
           }).catch(function () { NS.toast.show('专注钟暂时不可用，请稍后重试', { type: 'error' }); });
@@ -181,6 +182,8 @@
         });
       } else if (act === 'edit') {
         startEditTask(ctx.task, ctx.li);
+      } else if (act === 'alarm' || act === 'alarm-edit') {
+        insertAlarmEdit(ctx.task, ctx.li);
       } else if (act === 'addstep') {
         var ns = state.addSubtask(ctx.task.id);
         render.expandSteps(ctx.task.id);
@@ -193,8 +196,8 @@
         var r = state.toggleSubtask(ctx.task.id, btn.dataset.sid);
         refresh();
         if (r && r.justCompleted) NS.toast.show('这件事的步骤都完成了', { type: 'ok', ms: 2000 });
-      } else if (act === 'minedit') {
-        startEditMin(ctx.task, btn.dataset.sid, ctx.li);
+      } else if (act === 'subedit') {
+        startEditSub(ctx.task, btn.dataset.sid, ctx.li);
       } else if (act === 'subdelete') {
         state.deleteSubtask(ctx.task.id, btn.dataset.sid);
         refresh();
@@ -236,16 +239,18 @@
       input.select();
     }
 
-    function startEditMin(task, sid, li) {
-      var sub = state.findSub(task, sid);
-      if (!sub) return;
-      var minEl = li.querySelector('.subtask-min[data-sid="' + sid + '"]');
-      if (!minEl) return;
-      var input = render.inlineEdit(String(sub.minutes || 5), {
-        min: true,
+    function insertAlarmEdit(task, li) {
+      var mainEl = li.querySelector('.task-main');
+      if (!mainEl) return;
+      var box = document.createElement('div');
+      box.className = 'task-meta';
+      var input = render.inlineEdit(task.alarm || '', {
+        alarm: true,
         after: function () { state.persist(); refresh(); }
-      }, function (n) { state.setSubMinutes(task.id, sid, n); });
-      minEl.replaceWith(input);
+      }, function (v) { state.setTaskAlarm(task.id, v); });
+      input.setAttribute('aria-label', '闹钟时间');
+      box.appendChild(input);
+      mainEl.insertBefore(box, mainEl.querySelector('.task-meta') || null);
       input.focus();
       input.select();
     }

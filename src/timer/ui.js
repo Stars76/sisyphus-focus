@@ -31,6 +31,7 @@
       center: document.querySelector('.center'),
       dock: document.querySelector('.dock'),
       setupPanel: $('setupPanel'),
+      planRow: $('planRow'),
       phaseRow: $('phaseRow'),
       breakRow: $('breakRow'),
       customMin: $('customMin'),
@@ -122,9 +123,8 @@
       document.body.classList.toggle('hc', !!prefs.highContrast);
       document.body.dataset.motion = prefs.motion;
       document.body.dataset.task = t.task ? 'true' : 'false';
-      txt(el.taskName, t.task ? t.task.title : '');
-      el.taskName.hidden = !t.task;
-      el.taskName.title = t.task ? t.task.title : '';
+      // 专注钟界面不展示当前任务名（任务绑定关系保留：完成仍记回任务、主窗保持高亮）
+      if (el.taskName) { el.taskName.hidden = true; txt(el.taskName, ''); }
       flow && flow.setPaused && flow.setPaused(!!t.paused);
 
       /* 状态徽章：进行中/暂停时带剩余时间，空闲仅『待机中』 */
@@ -148,9 +148,18 @@
       el.startBtn.hidden = doneVisible;
       el.setupBtn.hidden = !idle || doneVisible;
       el.resetBtn.hidden = idle || doneVisible;
-      txt(el.setupBtn, Math.round(t.totalSec / 60) + ' 分钟');
+      var planInfo = t.plan;
+      txt(el.setupBtn, planInfo ? (planInfo.name + ' ×' + planInfo.rounds) : (Math.round(t.totalSec / 60) + ' 分钟'));
       if (el.setupBtn.hidden && setupOpen) closeSetup();
       el.setupPanel.hidden = !setupOpen || doneVisible;
+
+      /* 计划卡高亮 */
+      if (el.planRow) {
+        var cards = el.planRow.querySelectorAll('[data-plan]');
+        for (var k = 0; k < cards.length; k++) {
+          cards[k].setAttribute('aria-pressed', planInfo && planInfo.key === cards[k].dataset.plan ? 'true' : 'false');
+        }
+      }
 
       /* 时长选择高亮 */
       var mins = Math.round(t.totalSec / 60);
@@ -258,6 +267,23 @@
       }
     }
 
+    /* 打开计划/时长选择器（任务发起专注时由 await-plan 事件自动调起） */
+    function openSetup() {
+      setupOpen = true;
+      el.setupPanel.hidden = false;
+      el.setupBtn.setAttribute('aria-expanded', 'true');
+      var focus = el.closeSetup;
+      if (el.planRow) {
+        var sel = el.planRow.querySelector('[aria-pressed="true"]');
+        if (sel) focus = sel;
+        else {
+          sel = el.phaseRow.querySelector('[aria-pressed="true"]');
+          if (sel) focus = sel;
+        }
+      }
+      setupDialog.open(focus);
+    }
+
     /* ---------------- 事件绑定 ---------------- */
     function bind() {
       el.startBtn.addEventListener('click', function () {
@@ -266,13 +292,16 @@
       });
 
       el.resetBtn.addEventListener('click', function () { state.cmd('reset'); });
-      el.setupBtn.addEventListener('click', function () {
-        setupOpen = true;
-        el.setupPanel.hidden = false;
-        el.setupBtn.setAttribute('aria-expanded', 'true');
-        setupDialog.open(el.phaseRow.querySelector('[aria-pressed="true"]') || el.closeSetup);
-      });
+      el.setupBtn.addEventListener('click', openSetup);
       el.closeSetup.addEventListener('click', closeSetup);
+
+      if (el.planRow) el.planRow.addEventListener('click', function (ev) {
+        var card = ev.target && ev.target.closest ? ev.target.closest('[data-plan]') : null;
+        if (!card) return;
+        closeSetup();
+        state.cmd('applyPlan', { plan: card.dataset.plan });
+        setupOpen = false;
+      });
 
       el.phaseRow.addEventListener('click', function (ev) {
         var chip = ev.target && ev.target.closest ? ev.target.closest('[data-min]') : null;
@@ -399,6 +428,7 @@
       bind: bind,
       render: render,
       fitCenter: fitCenter,
+      openSetup: openSetup,
       showDone: showDone,
       hideDone: hideDone,
       celebrate: celebrate,

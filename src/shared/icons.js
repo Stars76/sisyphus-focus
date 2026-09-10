@@ -3,7 +3,7 @@
  * ------------------------------------------------------------
  * 用法：<sisy-icon name="LeftIcon"></sisy-icon>
  * 可用：MoveIcon ListIcon TimerIcon CalendarIcon SettingsIcon PinIcon
- *       CloseIcon LeftIcon RightIcon CheckIcon AddIcon EditIcon DeleteIcon
+ *       CloseIcon LeftIcon RightIcon CheckIcon AddIcon EditIcon DeleteIcon AlarmIcon
  * 图标路径为本地手写的 16x16 线性图标（stroke=currentColor），
  * 不加载任何字体、图片或远程资源。
  * ============================================================ */
@@ -24,7 +24,8 @@
     CheckIcon: '<path d="M3 8.5 L6.5 12 L13 4.5"/>',
     AddIcon: '<path d="M8 3 V13 M3 8 H13"/>',
     EditIcon: '<path d="M11 2.5 L13.5 5 L5.5 13 H3 V10.5 Z"/>',
-    DeleteIcon: '<path d="M2.5 4.5 H13.5 M5.5 4.5 V3.2 a1 1 0 0 1 1-1 h3 a1 1 0 0 1 1 1 V4.5 M4 4.5 L4.7 13 a1.5 1.5 0 0 0 1.5 1.4 h3.6 a1.5 1.5 0 0 0 1.5-1.4 L12 4.5"/>'
+    DeleteIcon: '<path d="M2.5 4.5 H13.5 M5.5 4.5 V3.2 a1 1 0 0 1 1-1 h3 a1 1 0 0 1 1 1 V4.5 M4 4.5 L4.7 13 a1.5 1.5 0 0 0 1.5 1.4 h3.6 a1.5 1.5 0 0 0 1.5-1.4 L12 4.5"/>',
+    AlarmIcon: '<circle cx="8" cy="8" r="5.8"/><path d="M8 5.2 V8 l2.1 1.2 M6 1.8 v1 M10 1.8 v1"/>'
   };
   var CSS = ':host{display:block}svg{width:100%;height:100%;display:block}';
 

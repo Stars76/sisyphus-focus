@@ -114,6 +114,15 @@
         if (NS.toast) {
           NS.toast.show('已放弃本轮（' + ev.plannedMinutes + ' 分钟，未计入统计）', { type: 'warn' });
         }
+      } else if (ev.type === 'await-plan') {
+        // 任务侧发起专注：先绑定任务并打开计划选择器，让用户选完再开始
+        ui.openSetup();
+      } else if (ev.type === 'plan-set') {
+        if (NS.toast) NS.toast.show('已选计划「' + ev.name + '」（共 ' + ev.steps + ' 段），点「开始」开跑', { type: 'ok', ms: 3500 });
+      } else if (ev.type === 'plan-advance') {
+        if (NS.toast) {
+          NS.toast.show(ev.name + ' · 第 ' + (ev.index + 1) + '/' + ev.total + ' 段：' + (ev.phase === 'focus' ? '专注' : '休息') + ' ' + ev.minutes + ' 分钟', { type: 'info', ms: 3000 });
+        }
       } else if (ev.type === 'day-rollover') {
         log.info('跨天：专注统计已重置为 ' + ev.day);
       }
@@ -155,6 +164,11 @@
       if (compact) document.body.classList.add('compact');
       ui.render(snap, state.remainMs());
       applyMotion();
+      // 任务侧发起专注：无论 await-plan 事件是否在小窗订阅前发出，
+      // 只要「已绑定任务且处于等待选计划」就保证弹出计划选择器
+      if (snap && snap.timer && snap.timer.idle && snap.timer.awaitPlan && snap.timer.task) {
+        ui.openSetup();
+      }
       if (snap && snap.timer.recovered) {
         log.info('计时已恢复，剩余 ' + Math.ceil(snap.timer.leftMs / 1000) + 's');
       }

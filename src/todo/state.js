@@ -156,6 +156,19 @@
         if (!v) return false;
         t.title = v; persist(); return true;
       },
+      /* 闹钟：合法 "HH:MM" 设置；空/null 清除 */
+      setTaskAlarm: function (id, hhmm) {
+        var t = findTask(id); if (!t) return false;
+        var v = String(hhmm == null ? '' : hhmm).trim();
+        var re = /^([01]\d|2[0-3]):[0-5]\d$/;
+        if (v) {
+          if (!re.test(v)) return false;
+          t.alarm = v;
+        } else if (t.alarm !== undefined) {
+          delete t.alarm;
+        }
+        persist(); return true;
+      },
       toggleTask: function (id) {
         var t = findTask(id); if (!t) return false;
         t.done = !t.done; persist(); return t.done;

@@ -39,7 +39,7 @@ contextBridge.exposeInMainWorld('dshTimer', {
   close: () => ipcRenderer.send('timer:close'),
   setTray: (on) => ipcRenderer.invoke('tray:set', on),
   notify: (title, body) => ipcRenderer.invoke('notify:show', title, body),
-  startTask: (task) => ipcRenderer.invoke('timer:task-start', task)
+  startTask: (task, opts) => ipcRenderer.invoke('timer:task-start', task, opts)
 });
 
 /* ---------------- 数据导出 / 导入 ---------------- */

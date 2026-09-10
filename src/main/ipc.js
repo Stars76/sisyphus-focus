@@ -53,7 +53,7 @@ function createIpc(deps) {
     if (!isStr(key, schema.MAX_KEY_LEN) || !schema.isValidStoreKey(key)) return '非法键名';
     return null;
   }
-  const TIMER_COMMANDS = ['start', 'pause', 'toggle', 'reset', 'setPhase', 'setDuration', 'abandon', 'resetToday', 'refresh'];
+  const TIMER_COMMANDS = ['start', 'pause', 'toggle', 'reset', 'setPhase', 'setDuration', 'abandon', 'resetToday', 'refresh', 'applyPlan'];
   function checkTimerCommand(type, payload) {
     if (typeof type !== 'string' || TIMER_COMMANDS.indexOf(type) === -1) return '未知计时命令';
     if (payload !== undefined && (payload === null || typeof payload !== 'object' || Array.isArray(payload))) return '命令负载必须是对象';
@@ -65,6 +65,9 @@ function createIpc(deps) {
       if (typeof sec !== 'number' || !isFinite(sec) || !Number.isInteger(sec) || sec < 60 || sec > 180 * 60) {
         return 'sec 必须是 60..10800 的整数';
       }
+    }
+    if (type === 'applyPlan') {
+      if (!payload || schema.PLAN_KEYS.indexOf(payload.plan) === -1) return 'plan 必须是预设键之一';
     }
     return null;
   }
@@ -260,9 +263,11 @@ function createIpc(deps) {
 
     /* ---------------- 计时状态 ---------------- */
     ipcMain.handle('timer:get', () => timer.snapshot());
-    ipcMain.handle('timer:task-start', (e, task) => {
+    ipcMain.handle('timer:task-start', (e, task, opts) => {
       if (!task || typeof task !== 'object' || Array.isArray(task)) return fail('当前任务格式非法');
-      return timer.startTask(task);
+      if (opts !== undefined && (opts === null || typeof opts !== 'object' || Array.isArray(opts))) return fail('专注选项格式非法');
+      const noStart = opts && opts.noStart === true;
+      return timer.startTask(task, { noStart: noStart });
     });
     ipcMain.handle('timer:cmd', (e, type, payload) => {
       const err = checkTimerCommand(type, payload);
