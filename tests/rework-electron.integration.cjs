@@ -1,6 +1,8 @@
 // tests/rework-electron.integration.cjs · 真实 Electron 集成证据（R2 冷启动 / 子框架广播 / 落盘）
 // 可复现命令（app path 固定为项目根，主窗口 loadFile 指向根 index.html）：
-//   .\electron\electron.exe tests/rework-electron.integration.cjs
+//   Windows:  .\electron\electron.exe tests\rework-electron.integration.cjs
+//   macOS:    ./release/mac-arm64/Sisyphus.app/Contents/MacOS/Sisyphus tests/rework-electron.integration.cjs
+//   （或统一用已安装的 electron：npx electron tests/rework-electron.integration.cjs）
 // 无需任何未提交的临时入口文件；隔离 userData 位于系统临时目录并在退出前自清理。
 // 覆盖：
 //   1) 真实主窗 IPC（store:get / timer:get）可用
@@ -41,16 +43,22 @@ const results = [];
 const check = (name, cond, detail) => { results.push({ name, pass: !!cond, detail: detail === undefined ? null : detail }); console.log((cond ? '  ✓ ' : '  ✗ ') + name + (detail !== undefined ? '  ' + JSON.stringify(detail) : '')); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 自清理临时 userData：调度 detached 清理进程（系统自带 PowerShell），待主进程（含 Chromium
-// 子进程）退出后删除；不依赖主进程是否仍持有句柄；多次幂等。启动时也会清历史残留兜底。
+// 自清理临时 userData：调度 detached 清理进程，待主进程（含 Chromium 子进程）退出后删除；
+// 不依赖主进程是否仍持有句柄；多次幂等。启动时也会清历史残留兜底。
+// 按平台选 shell：Windows 用 PowerShell，其它平台用 /bin/sh（临时目录路径作为参数传入，
+// 不拼进命令字符串，避免空格与引号问题）。
 function scheduleCleanup() {
   // 先即时尝试（Chromium 已释放句柄时常可同步删掉）
   try { fs.rmSync(TMP, { recursive: true, force: true }); return; } catch (e) { }
-  // 失败则调度 detached PowerShell 延迟删（主进程退出后独立执行）
+  // 失败则调度 detached 延迟删（主进程退出后独立执行）
   try {
     const { spawn } = require('child_process');
-    spawn('powershell.exe', ['-NoProfile', '-Command', 'Start-Sleep -Seconds 2; Remove-Item -LiteralPath \'' + TMP.replace(/'/g, "''") + '\' -Recurse -Force'],
-      { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    const child = process.platform === 'win32'
+      ? spawn('powershell.exe', ['-NoProfile', '-Command', 'Start-Sleep -Seconds 2; Remove-Item -LiteralPath \'' + TMP.replace(/'/g, "''") + '\' -Recurse -Force'],
+        { detached: true, stdio: 'ignore', windowsHide: true })
+      : spawn('/bin/sh', ['-c', 'sleep 2; rm -rf -- "$1"', 'sh', TMP],
+        { detached: true, stdio: 'ignore' });
+    child.unref();
   } catch (e) { console.log('cleanup spawn failed: ' + e.message); }
 }
 // 启动兜底：清理上一轮遗留的隔离 userData（主进程退出后 Chromium 句柄已释放，可删）
