@@ -93,7 +93,7 @@ jobs:
           $lines += ""
           $lines += "- 数据只写在本机 ``%APPDATA%\Sisyphus\sisy-store.json``（每日备份保留 10 份），卸载默认保留用户数据"
           $lines += "- 应用**不发起任何网络请求**、无遥测；隐私与安全口径见 SECURITY.md"
-          $lines += "- 平台：Windows 10/11 x64；macOS/Linux 暂不支持"
+          $lines += "- 平台：Windows 10/11 x64；macOS 12+ 走本地源码构建（见 README，本页不发布 macOS 产物）；Linux 未支持"
           $lines += ""
           $lines += "## 版本说明"
           $lines += ""

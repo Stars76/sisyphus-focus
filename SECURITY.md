@@ -17,7 +17,8 @@
 Please include:
 
 - the app version (the app's ⚙ 设置 → 数据备份 shows it),
-- your Windows build (e.g. `winver` output),
+- your OS and build (on Windows e.g. `winver` output; on macOS the version
+  from  → About This Mac, and whether it is Apple Silicon or Intel),
 - steps to reproduce, and
 - the impact you see.
 
@@ -37,7 +38,8 @@ In rough order of relevance for this app:
    writing files outside the app data directory.
 4. Tampering with the authoritative timer state from the renderer (e.g.
    forcing a round to complete twice).
-5. Writing outside `%APPDATA%\Sisyphus`.
+5. Writing outside the app data directory (`%APPDATA%\Sisyphus` on Windows,
+   `~/Library/Application Support/Sisyphus` on macOS).
 6. A packaged build that differs from source.
 
 ## Security design notes

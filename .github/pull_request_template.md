@@ -25,11 +25,14 @@ from older PRs/docs.
 - [ ] `node tools/check-syntax.js` — result:
 - [ ] `node tools/selftest.js` — result:
 - [ ] `node tests/run-all.js` — result (passed/total):
-- [ ] `npm run smoke` — result (Windows desktop session required; write N/A if not run and why):
+- [ ] `npm run smoke` — result (a real desktop session is required — Windows or macOS; write N/A if not run and why):
 
 ## UI changes
 
 <!-- For UI changes only: before/after screenshots. Delete this section otherwise. -->
+<!-- Note: Electron's capturePage() only captures the web contents, so native window
+     chrome (macOS traffic lights, the menu bar) will not appear in those screenshots.
+     For those, take a real screen capture. -->
 
 **Before:**
 

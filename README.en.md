@@ -1,9 +1,9 @@
 # 西西弗斯 (Sisyphus) · Focus Workbench
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
+![Platform: Windows 10/11 · macOS 12+](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B-blue)
 ![Electron: 33.4.11](https://img.shields.io/badge/Electron-33.4.11-47848F)
-![Version: 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)
+![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)
 ![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20deps-0-success)
 
 [中文](README.md) · English
@@ -13,7 +13,7 @@ Two small focus tools, packed into a single **frameless Electron desktop app**:
 - **今日事** (Today, the task view) — task management (daily task templates, a month calendar, grouping by date, sub-steps)
 - **专注钟** (Focus Clock) — a vertical "character sea" countdown (the water level sinks as progress advances), which can pop out into an always-resident desk-corner mini window
 
-No system title bar: the drag region, navigation, and minimize/maximize/close all live in the app's own title bar; timer status is visible in real time in the main window's title bar and can stay resident in the **system tray**.
+No system title bar: on Windows the drag region, navigation, and minimize/maximize/close all live in the app's own title bar, with timer status visible in real time there, and the app can stay resident in the **system tray**. On macOS the app uses the native traffic lights instead (`titleBarStyle: 'hidden'`), the tray icon is a monochrome menu-bar template image, and the remaining time can be shown directly in the menu bar.
 
 **Fully local**: not a single network request, no accounts, no telemetry. All your data is one JSON file on your disk.
 
@@ -27,12 +27,12 @@ No system title bar: the drag region, navigation, and minimize/maximize/close al
 
 ## Download & Install (No Command Line Needed)
 
-Download the Windows x64 artifacts from this repository's **Releases** page and double-click:
+**Windows**: download the x64 artifacts from this repository's **Releases** page and double-click:
 
 | File | Notes |
 |------|-------|
-| `Sisyphus-2.0.0-setup.exe` | Installer: installs to `%LOCALAPPDATA%\Programs`, creates Desktop and Start Menu shortcuts (named "西西弗斯"), **user data is preserved on uninstall** |
-| `Sisyphus-2.0.0-portable.exe` | Portable: double-click to run directly; data likewise lives in `%APPDATA%\Sisyphus` |
+| `Sisyphus-2.1.0-setup.exe` | Installer: installs to `%LOCALAPPDATA%\Programs`, creates Desktop and Start Menu shortcuts (named "西西弗斯"), **user data is preserved on uninstall** |
+| `Sisyphus-2.1.0-portable.exe` | Portable: double-click to run directly; data likewise lives in `%APPDATA%\Sisyphus` |
 
 > **The artifacts are not code-signed** (this project has not purchased a code-signing certificate), so on first run SmartScreen may warn "Unknown publisher" —
 > just click "More info → Run anyway". To verify integrity, compare against `SHA256SUMS.txt` in the Release.
@@ -40,6 +40,21 @@ Download the Windows x64 artifacts from this repository's **Releases** page and 
 >
 > The signing pipeline is already wired up (`CSC_LINK` / Azure Trusted Signing / `npm run verify:signature`);
 > once a certificate is in hand, build artifacts will carry a trusted signature — see [docs/release.md](docs/release.md#代码签名).
+
+**macOS**: Releases currently ship Windows artifacts only (CI runs Windows only — see "Known Limitations"),
+so macOS is a local source build. Both Apple Silicon and Intel are supported; the output is a dmg + zip:
+
+```bash
+git clone https://github.com/Stars76/sisyphus-focus.git
+cd sisyphus-focus
+bash build/mac-build.sh          # runs the four test gates, then packages into release/
+open release/mac-arm64/Sisyphus.app
+```
+
+When no certificate is found the build script applies an **ad-hoc signature** automatically — on Apple Silicon an
+unsigned `.app` is reported as damaged by the system and will not open on double-click, so this step is not optional.
+For signing and notarization of a real public distribution (`CSC_LINK` / hardened runtime / entitlements),
+see [docs/release.md](docs/release.md#代码签名).
 
 ---
 
@@ -62,7 +77,7 @@ The three main threads now:
 | Problem | The approach now |
 |---------|------------------|
 | Dual-instance timer conflicts | There is exactly one copy of timer state, living in the main process (`src/main/timer.js`); both windows can only send commands and subscribe to broadcasts |
-| Data reliability | The main process is the sole writer (`src/main/store.js`) → `%APPDATA%\Sisyphus\sisy-store.json`, atomic writes + rolling backups + import/export |
+| Data reliability | The main process is the sole writer (`src/main/store.js`) → `sisy-store.json` in the data directory (Windows `%APPDATA%\Sisyphus`, macOS `~/Library/Application Support/Sisyphus`), atomic writes + rolling backups + import/export |
 | Single files stuffed with logic | Split into `shared/` + `main/` + `todo/` + `timer/` modules; page HTML keeps only structure and styling |
 
 ```
@@ -72,7 +87,7 @@ The three main threads now:
 ├── preload.js                  # Purpose-grouped bridges: dshWindow dshStore dshTimer dshData dshLog dshApp
 ├── smoke.js                    # Smoke-test entry (must be launched with the project root as the app path)
 ├── package.json                # Electron 33.4.11 pinned; zero runtime dependencies (dependencies is empty)
-├── assets/                     # App icon + title-bar logo
+├── assets/                     # App icon + title-bar logo + macOS menu-bar template icon
 ├── electron/                   # Unpacked Electron runtime (not committed; npm start prefers reusing it)
 ├── src/
 │   ├── main/
@@ -80,7 +95,9 @@ The three main threads now:
 │   │   ├── schema.js           # Structure validation for known storage keys + import summary + partition map
 │   │   ├── migrations.js       # Versioned migration chain (idempotent, keeps a migration log)
 │   │   ├── timer.js            # The one timer state machine (explicit transitions / pause / statistics / clock-tamper resistance)
+│   │   ├── alarm.js            # Task-alarm scheduler (scans "today" by HH:MM and fires a system notification)
 │   │   ├── tray.js             # System tray
+│   │   ├── menu.js             # Application menu template (macOS only: without it Cmd+Q/C/V and friends stop working)
 │   │   ├── ipc.js              # IPC registration + dialogs + log files
 │   │   └── util.js             # Date and time formatting
 │   ├── shared/
@@ -100,41 +117,48 @@ The three main threads now:
 │   ├── smoke-test.js           # Real-machine smoke test (actually opens both windows to verify consistency)
 │   ├── ui-review.cjs           # Real-Electron UI acceptance (31 checks + screenshots)
 │   └── check-asar-runtime.js   # Verifies new files actually made it into the asar
-├── tests/                      # Regression suites (8 suites, 387 assertions total)
+├── tests/                      # Regression suites (9 suites, 425 assertions total)
 ├── docs/                       # Data & recovery / release packaging / troubleshooting / repo configuration
-└── build/                      # Windows one-click build + signature-verification scripts
+└── build/                      # One-click build + signature-verification scripts (Windows: win-build.ps1 / macOS: mac-build.sh)
 ```
 
 ---
 
 ## Running from Source (Development)
 
-> If you just want to **use the app**, you can skip this — double-click the exe from the Release.
+> If you just want to **use the app**, you can skip this — on Windows double-click the exe from the Release;
+> on macOS build a local `.app` with `build/mac-build.sh` as described above.
 
-```powershell
+```bash
 npm install        # First time: fetches the Electron runtime
 npm start          # Launch the main window (今日事)
 npm run compact    # Launch the 专注钟 mini window directly
 ```
 
 - The launcher `tools/launch.js` prefers the repo's unpacked `electron/` runtime (no download needed when present), falling back to `node_modules` otherwise.
-- To package an exe: `powershell -File build\win-build.ps1`; artifacts land in `release\` (see [docs/release.md](docs/release.md) for details).
+- To package: on Windows `powershell -File build\win-build.ps1` (artifacts in `release\`);
+  on macOS `bash build/mac-build.sh` (artifacts in `release/mac-arm64/`).
+  Both run the same set of test gates first — see [docs/release.md](docs/release.md).
 
 ### Verification Commands
 
-| Command | What it does | Verified locally |
+| Command | What it does | Verified locally (macOS 26 / Apple Silicon) |
 |---------|--------------|------------------|
-| `npm run check` | Static checks: syntax / script references / id existence (including element ids referenced from `tools/*.cjs`) / load order | 43 JS·CJS files, 3 pages and 61 tool-script id references all pass |
-| `npm run check:links` | Docs check: every relative path and `#anchor` in the Markdown actually exists | 12 files / 60 links all valid |
+| `npm run check` | Static checks: syntax / script references / id existence (including element ids referenced from `tools/*.cjs`) / load order | 47 JS·CJS files, 3 pages and 61 tool-script id references all pass |
+| `npm run check:links` | Docs check: every relative path and `#anchor` in the Markdown actually exists | 12 files / 66 links all valid |
 | `npm test` | Pure-Node logic self-test: dates, storage, timer state machine, task data layer | 119 assertions pass |
-| `npm run test:regression` | Regression suite | 8 suites / 387 assertions |
+| `npm run test:regression` | Regression suite | 9 suites / 425 assertions |
 | `npm run verify` | Chains the checks above (**the master gate before committing — it's what CI runs**) | — |
 | `npm run smoke` | Real-machine smoke test: actually opens both windows to verify one shared timer state | 29 checks pass; results written to `tools/smoke-result.json` |
-| `electron tools/ui-review.cjs after` | Real-Electron UI acceptance: screenshots + layout assertions | 31/31 checks pass; artifacts in `.tmp/ui-review-out/after/` |
-| `npm run verify:signature` | Verifies the signing status of artifacts in `release/` | See [docs/release.md](docs/release.md#代码签名) |
+| `electron tools/ui-review.cjs after` | Real-Electron UI acceptance: screenshots + layout assertions | 27/31 checks pass; artifacts in `.tmp/ui-review-out/after/` |
+| `npm run verify:signature` | Verifies the signing status of Windows artifacts in `release/` | See [docs/release.md](docs/release.md#代码签名) |
 
 > `tests/packaging-parity.test.js` requires an environment with **dependencies installed** (it calls asar to check packaging parity);
-> without dependencies it errors out, while the remaining 7 suites — 381 assertions in total — depend on no third-party packages.
+> without dependencies it errors out, while the remaining 8 suites — 419 assertions in total — depend on no third-party packages.
+>
+> 4 of the 31 `ui-review` checks (task-row focus start / trusted renderer must not switch an ongoing task /
+> long title unobstructed at 230×300 / same task resumed from its row) are already red on the current `main`
+> regardless of platform; this repository does not touch them — see [ROADMAP](ROADMAP.md).
 
 ---
 
@@ -144,7 +168,7 @@ npm run compact    # Launch the 专注钟 mini window directly
 
 ```
 main.js
-  └── src/main/timer.js  ← the single state (memory + %APPDATA%\Sisyphus\sisy-store.json)
+  └── src/main/timer.js  ← the single state (memory + sisy-store.json in the data directory)
         ├── Main-window title-bar status strip     read-only subscription
         └── 专注钟 mini window (can be kept on top)   read-only subscription
 ```
@@ -211,7 +235,7 @@ At the end of every round (completed or abandoned) one entry is appended to `sis
 
 ## Data
 
-**All data lives in the main process**, in the file `%APPDATA%\Sisyphus\sisy-store.json` (`userData` is named after productName; the path is visible under "今日事 → ⚙ 设置 → 数据备份" (Today → ⚙ Settings → Data backup)):
+**All data lives in the main process**, in `sisy-store.json` inside the data directory (`userData` is named after productName: `%APPDATA%\Sisyphus` on Windows, `~/Library/Application Support/Sisyphus` on macOS; the path is visible under "今日事 → ⚙ 设置 → 数据备份" (Today → ⚙ Settings → Data backup)):
 
 | Key | Contents |
 |-----|----------|
@@ -239,7 +263,7 @@ At the end of every round (completed or abandoned) one entry is appended to `sis
 
 ## Development
 
-After editing, `Ctrl+R` inside the app applies changes immediately (main-process code requires an app restart).
+After editing, `Ctrl+R` inside the app (`⌘R` on macOS) applies changes immediately (main-process code requires an app restart).
 
 | Location | What it is |
 |----------|------------|
@@ -267,7 +291,9 @@ Commit conventions, branch naming, and the official line on "why there is no ESL
 
 ## Known Limitations
 
-- **Windows 10/11 x64 only**: the frameless window's self-drawn title bar, tray, and power events are all tuned for Windows; other platforms are unverified
+- **Platforms**: Windows 10/11 x64 and macOS 12+ (arm64 / x64) are adapted and verified on real hardware; Linux is not done and unverified
+- **No macOS binaries are published**: CI only runs `windows-2022` (macOS runners bill at 10× the Linux rate; whether to adopt them is the maintainer's call), so macOS users build locally with `bash build/mac-build.sh`. Without a certificate the script ad-hoc signs, which is enough to double-click and run locally
+- **Notifications on macOS need a signature**: on unsigned or un-notarized builds the system may silently drop notifications (a local ad-hoc signature usually works); a real distribution needs a Developer ID signature plus notarization
 - **Artifacts are unsigned by default** (this project has no code signing certificate) → SmartScreen will warn "Unknown publisher"; the signing pipeline is ready; free routes (Microsoft Store re-signing / SignPath Foundation), paid routes and their eligibility limits are in [docs/release.md](docs/release.md#代码签名)
 - When Windows Developer Mode is off locally, winCodeSign fails to extract its symlink → the build script automatically degrades to `signAndEditExecutable=false` (the exe's embedded icon/metadata fall back to Electron defaults; the artifact still runs; CI takes the full path)
 - The tray does **not** do "prevent system sleep while idle": closing the lid or manually sleeping still interrupts a focus round (completions during suspension are back-filled on wake)

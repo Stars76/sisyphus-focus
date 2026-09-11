@@ -3,7 +3,7 @@
 ## Welcome
 
 Thanks for your interest in contributing! 西西弗斯 is a small, deliberately
-simple app: a Windows desktop focus workspace with a task manager ("今日事")
+simple app: a Windows / macOS desktop focus workspace with a task manager ("今日事")
 and a character-rain countdown timer ("专注钟"). It is plain HTML/CSS/JS on
 Electron — no bundler, no framework, no runtime dependencies — and it is meant
 to stay that way. There is plenty of room for improvements, and contributions
@@ -61,9 +61,11 @@ Notes:
 
 - `npm run verify` is the gate every PR must pass. Run it before you push.
 - `npm run smoke` launches a real Electron instance and therefore needs a
-  desktop session — Windows only, not usable in a headless container.
-- While iterating: `Ctrl+R` reloads the renderer, but main-process changes
-  (`main.js`, `src/main/*`) need a full restart of `npm start`.
+  desktop session (Windows and macOS both work; not usable in a headless
+  container).
+- While iterating: `Ctrl+R` (`⌘R` on macOS) reloads the renderer, but
+  main-process changes (`main.js`, `src/main/*`) need a full restart of
+  `npm start`.
 
 ## Architecture pointers
 
@@ -107,7 +109,8 @@ Extend the suite that matches your change:
 | Store, backups, atomicity | `tests/data-reliability.test.js` |
 | Migrations, date-key normalisation, rework scenarios | `tests/rework-scenarios.test.js` |
 | Build, packaging, version metadata | `tests/version-sync.test.js`, `tests/packaging-parity.test.js` |
-| End-to-end behaviour on Windows | `tools/smoke-test.js` (manual, needs a desktop) |
+| End-to-end behaviour on Windows / macOS | `tools/smoke-test.js` (manual, needs a desktop) |
+| Platform-specific wiring (menus, tray icon) | `tests/macos-support.test.js` |
 
 If your change touches user-visible behaviour but no test changes, explain why
 in the PR.

@@ -77,14 +77,14 @@ git log --oneline -5      # 确认要推的内容
 3. **仓库描述**（GitHub 右上 About → Description，直接粘贴）：
 
    ```text
-   西西弗斯 · 专注工作台：本地优先的 Windows 桌面专注工具（今日事任务管理 + 字符海专注钟）。零网络请求、零遥测、零运行时依赖。
+   西西弗斯 · 专注工作台：本地优先的桌面专注工具（今日事任务管理 + 字符海专注钟），支持 Windows 与 macOS。零网络请求、零遥测、零运行时依赖。
    ```
 
 4. **Topics**（About → Topics，逐个添加）：
 
    ```text
    electron  productivity  pomodoro  focus-timer  todo-app  task-manager
-   local-first  offline  privacy  no-telemetry  windows-desktop  vanilla-js
+   local-first  offline  privacy  no-telemetry  windows-desktop  macos  vanilla-js
    ```
 
 5. **勾选** About 里的 Releases（让下载入口显示在仓库首页）。
@@ -158,8 +158,9 @@ git push origin v2.0.0
 - [ ] `https://github.com/$owner/sisyphus-focus` → About 里有描述与 topics，Releases 显示下载入口
 - [ ] Actions 里 `Windows Build`（PR 触发）与 `Continuous Release`（主分支触发）至少各成功一次
 - [ ] 仓库 Insights → Community Standards 里 CONTRIBUTING / CODE_OF_CONDUCT / SECURITY / issue 模板 / PR 模板**全部已识别**
-- [ ] Release 附件里有 `Sisyphus-2.0.0-setup.exe`、`Sisyphus-2.0.0-portable.exe`、`SHA256SUMS.txt`
+- [ ] Release 附件里有 `Sisyphus-2.1.0-setup.exe`、`Sisyphus-2.1.0-portable.exe`、`SHA256SUMS.txt`
 - [ ] 下载 portable 双击能跑，数据落在 `%APPDATA%\Sisyphus\sisy-store.json`
+- [ ] macOS：`bash build/mac-build.sh` 能出 `.app`，双击能开，`codesign --verify` 通过（CI 不覆盖 macOS，这条只能本机自查）
 - [ ] `README.en.md` 与中文 README 互链能跳转；`docs/data.md#7-从-1x-手工迁移` 锚点不 404
 - [ ] 占位符清零（应只剩本文件里作为示例/说明出现的 `OWNER`）：
       `Select-String -Path package.json,CONTRIBUTING.md,.github/ISSUE_TEMPLATE/config.yml -Pattern 'OWNER'`

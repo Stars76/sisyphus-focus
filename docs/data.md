@@ -2,22 +2,23 @@
 
 > 适用版本：西西弗斯 2.x（schema 2）。本文与 `tests/data-reliability.test.js`、
 > `tests/ipc-validation.test.js` 的断言一一对应。
-> 数据目录是 `%APPDATA%\Sisyphus`（Electron 按 productName 取目录名）。
+> 数据目录是 `%APPDATA%\Sisyphus`（Windows）或 `~/Library/Application Support/Sisyphus`（macOS），
+> 由 Electron 按 productName 取目录名，代码里一律走 `app.getPath('userData')`。
 > 2.0 起存储键前缀与文件名统一为 `sisy-*`；1.x 的 `adhd-*` 数据不自动迁移，
 > 手工迁移步骤见本文 [第 7 节](#7-从-1x-手工迁移)，版本变更口径见 [CHANGELOG.md](../CHANGELOG.md) 的 2.0.0 条目。
 
 ## 1. 数据都在哪
 
-| 路径（Windows） | 内容 |
+| 路径（Windows / macOS） | 内容 |
 |---|---|
-| `%APPDATA%\Sisyphus\sisy-store.json` | 唯一权威数据文件（外层 `{schema, updatedAt, data}`） |
-| `%APPDATA%\Sisyphus\sisy-store.json.tmp` | 原子写入的中转文件（成功后被 rename 消耗；崩溃时可能残留，可恢复） |
-| `%APPDATA%\Sisyphus\sisy-store.corrupt-<ts>.json` | 主文件损坏时保留的原始现场（永不自动删除） |
-| `%APPDATA%\Sisyphus\backups\sisy-store-YYYYMMDD.json` | 每日启动滚动备份（最多 10 份） |
-| `%APPDATA%\Sisyphus\backups\sisy-store-<stamp>-pre-import.json` | 每次导入前自动备份 |
-| `%APPDATA%\Sisyphus\backups\sisy-store-<stamp>-pre-clear.json` | 每次清空前自动备份 |
-| `%APPDATA%\Sisyphus\logs\sisy.log` | 诊断日志（超 1MB 滚动为 `.1`；不含任务正文） |
-| `%APPDATA%\Sisyphus\sisy-timer-win.json` | 专注钟小窗位置（非业务数据） |
+| `sisy-store.json` | 唯一权威数据文件（外层 `{schema, updatedAt, data}`） |
+| `sisy-store.json.tmp` | 原子写入的中转文件（成功后被 rename 消耗；崩溃时可能残留，可恢复） |
+| `sisy-store.corrupt-<ts>.json` | 主文件损坏时保留的原始现场（永不自动删除） |
+| `backups/sisy-store-YYYYMMDD.json` | 每日启动滚动备份（最多 10 份） |
+| `backups/sisy-store-<stamp>-pre-import.json` | 每次导入前自动备份 |
+| `backups/sisy-store-<stamp>-pre-clear.json` | 每次清空前自动备份 |
+| `logs/sisy.log` | 诊断日志（超 1MB 滚动为 `.1`；不含任务正文） |
+| `sisy-timer-win.json` | 专注钟小窗位置（非业务数据） |
 
 存储键清单见 `src/main/schema.js` 的 `KEYS`；未知 `sisy-*` 键向前兼容、原样搬运。
 
