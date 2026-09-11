@@ -298,6 +298,11 @@ function createIpc(deps) {
       if (!w) return false;
       const next = !w.isAlwaysOnTop();
       w.setAlwaysOnTop(next, 'floating');
+      // macOS：置顶窗口还要显式声明跨 Space + 全屏可见，否则切到别的桌面就被盖住。
+      // skipTransformProcessType 必须带上，理由同 main.js 建窗处（不传会让字符海停止渲染）。
+      if (process.platform === 'darwin') {
+        w.setVisibleOnAllWorkspaces(next, { visibleOnFullScreen: true, skipTransformProcessType: true });
+      }
       return next;
     });
     ipcMain.handle('timer:pin-get', () => {

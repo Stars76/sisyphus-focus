@@ -28,6 +28,10 @@ body{background:var(--surface)}
 .win-controls button.maximized .max-icon{display:block}
 .win-controls button.maximized .restore-icon{display:none}
 body:not(.electron) .win-controls{display:none}
+/* macOS：窗口按钮由系统绘制（红绿灯），自绘按钮不出现；
+   标题栏左侧让出红绿灯的位置，与 main.js 的 trafficLightPosition 对应 */
+body.platform-darwin .win-controls{display:none}
+body.platform-darwin .titlebar{padding-left:84px}
 .main{flex:1;min-height:0;position:relative}
 .main iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block}
 
