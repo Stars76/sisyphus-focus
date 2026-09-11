@@ -5,6 +5,12 @@
  *   - 菜单可直接 开始 / 暂停 / 重置 / 切换阶段
  *   - 快速打开专注钟小窗、显示主窗、退出应用
  *   - 主窗 ✕ 可配置为「留在托盘」（prefs.closeToTray）
+ *
+ * 平台差异（两处，都在 macOS 上才成立）：
+ *   1. 图标：macOS 菜单栏要单色模板图（系统自动反色）；
+ *      其它平台继续用彩色应用图标缩到 16px。
+ *   2. 菜单：macOS 上一旦 setContextMenu，click / double-click / right-click
+ *      事件就都不再触发，因此不设常驻菜单，改为左键回主窗、右键临时弹出。
  * ============================================================ */
 'use strict';
 
@@ -18,6 +24,8 @@ function createTray(deps) {
   const onOpenCompact = deps.onOpenCompact || function () { };
   const onQuit = deps.onQuit || function () { };
   const iconPath = deps.iconPath;
+  const templatePath = deps.templatePath;
+  const isMac = process.platform === 'darwin';
 
   let tray = null;
   let rebuildT = null;
@@ -25,17 +33,35 @@ function createTray(deps) {
 
   function icon() {
     try {
+      // macOS：单色模板图 + setTemplateImage，系统按浅色/深色菜单栏自动反色。
+      // 彩色图标缩到 16px 塞进菜单栏，在深色模式下是错的观感，Retina 下也会糊。
+      if (isMac) {
+        const tpl = nativeImage.createFromPath(templatePath || '');
+        if (tpl.isEmpty()) return nativeImage.createEmpty();
+        tpl.setTemplateImage(true);
+        return tpl;
+      }
       const img = nativeImage.createFromPath(iconPath);
       if (img.isEmpty()) return nativeImage.createEmpty();
       return img.resize({ width: 16, height: 16 });
     } catch (e) { log('托盘图标加载失败', e); return nativeImage.createEmpty(); }
   }
 
+  function mmss(sec) {
+    return Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2);
+  }
+
   function title(snap) {
     const t = snap.timer;
-    if (t.running) return '专注中 ' + Math.floor(t.leftSec / 60) + ':' + ('0' + (t.leftSec % 60)).slice(-2);
-    if (t.paused) return '已暂停 ' + Math.floor(t.leftSec / 60) + ':' + ('0' + (t.leftSec % 60)).slice(-2);
+    if (t.running) return '专注中 ' + mmss(t.leftSec);
+    if (t.paused) return '已暂停 ' + mmss(t.leftSec);
     return t.phaseLabel + ' · 待开始';
+  }
+
+  /* macOS 菜单栏文字：只在真正跑着或暂停时显示数字，待机时不占菜单栏位置 */
+  function menuBarTitle(snap) {
+    const t = snap.timer;
+    return (t.running || t.paused) ? mmss(t.leftSec) : '';
   }
 
   function buildMenu(snap) {
@@ -68,7 +94,13 @@ function createTray(deps) {
     if (ttl !== lastTitle) {
       lastTitle = ttl;
       try { tray.setToolTip('西西弗斯 · ' + ttl); } catch (e) { log('设置托盘提示失败', e); }
+      // macOS 的原生做法：剩余时间直接写在菜单栏图标旁边（Windows 只能靠悬停提示）
+      if (isMac) {
+        try { tray.setTitle(menuBarTitle(snapNow)); } catch (e) { log('设置菜单栏标题失败', e); }
+      }
     }
+    // macOS 的菜单是右键临时弹出的，不存在常驻菜单需要重建
+    if (isMac) return;
     if (rebuildT) return;
     rebuildT = setTimeout(() => {
       rebuildT = null;
@@ -85,9 +117,16 @@ function createTray(deps) {
       try {
         tray = new Tray(icon());
         tray.setToolTip('西西弗斯');
-        tray.setContextMenu(buildMenu(timer.snapshot()));
-        tray.on('click', () => { onShowMain(); });
-        tray.on('double-click', () => { onShowMain(); });
+        if (isMac) {
+          // 不能 setContextMenu：macOS 上一旦设了常驻菜单，click / right-click 都不再触发，
+          // 「点托盘回到主窗」会直接失效。改成左键回主窗、右键临时弹出同一份菜单。
+          tray.on('click', () => { onShowMain(); });
+          tray.on('right-click', () => { tray.popUpContextMenu(buildMenu(timer.snapshot())); });
+        } else {
+          tray.setContextMenu(buildMenu(timer.snapshot()));
+          tray.on('click', () => { onShowMain(); });
+          tray.on('double-click', () => { onShowMain(); });
+        }
         refresh();
         log('托盘已就绪');
       } catch (e) {

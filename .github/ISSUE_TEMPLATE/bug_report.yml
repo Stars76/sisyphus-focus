@@ -13,11 +13,11 @@ body:
       required: true
 
   - type: input
-    id: windows-version
+    id: os-version
     attributes:
-      label: Windows 版本
-      description: 可用 `winver` 查看，如 Windows 11 23H2 (22631.4460)
-      placeholder: "例如：Windows 11 23H2"
+      label: 系统版本
+      description: Windows 可用 `winver` 查看（如 Windows 11 23H2 (22631.4460)）；macOS 写版本号与芯片（如 macOS 15.3 / Apple Silicon）
+      placeholder: "例如：Windows 11 23H2，或 macOS 15.3 Apple Silicon"
     validations:
       required: true
 
@@ -26,9 +26,10 @@ body:
     attributes:
       label: 安装方式
       options:
-        - 安装版（NSIS）
-        - 免安装（portable）
-        - 从源码运行
+        - 安装版（NSIS，仅 Windows）
+        - 免安装（portable，仅 Windows）
+        - 从源码运行（npm start）
+        - 本地构建的 .app（仅 macOS）
     validations:
       required: true
 

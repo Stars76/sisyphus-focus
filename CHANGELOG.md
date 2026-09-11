@@ -3,6 +3,58 @@
 本项目版本号遵循语义化版本；`package.json` 的 `version` 必须与本文件最新条目一致
 （由 `tests/version-sync.test.js` 校验）。
 
+## 2.1.0（2026-09-11）
+
+macOS 适配。此前项目标注「仅 Windows」，理由是「自绘标题栏、托盘、电源事件全部按 Windows 调过，
+没有真机验证就不发产物」；本次在 Apple Silicon 真机上完成适配与验证，把该理由消掉。
+
+### macOS 运行时适配
+- **应用菜单**：新增 `src/main/menu.js`。此前 `main.js` 无条件 `Menu.setApplicationMenu(null)`，
+  在 macOS 上会移除承载系统快捷键的菜单栏，导致 `Cmd+Q` / `Cmd+C` / `Cmd+V` / `Cmd+X` / `Cmd+A` /
+  `Cmd+W` / `Cmd+M` / `Cmd+H` 全部失效（应用甚至无法用键盘退出）。现在仅 Windows/Linux 移除菜单，
+  macOS 装一份最小菜单（App / 编辑 / 视图 / 窗口，全部用 `role:` 交给系统本地化）。
+  视图菜单顺带恢复了 `reload` / `toggleDevTools`——README 与 docs/diagnostics.md 里写的这两个
+  调试快捷键在此之前本来就是死的。模板是纯数据，`tests/macos-support.test.js` 直接断言必需 role 齐全
+- **窗口外观**：主窗在 macOS 上改用 `frame: true` + `titleBarStyle: 'hidden'` + `trafficLightPosition`，
+  拿到系统原生红绿灯；自绘的窗口按钮仅在非 macOS 出现（`src/shell.css` 的 `body.platform-darwin`）。
+  macOS 上不再接管标题栏双击——交给系统按「桌面与程序坞 → 双击标题栏」的偏好处理，避免与系统行为打架。
+  `preload.js` 向渲染层暴露 `platform`，用于加平台 class
+- **托盘**：macOS 菜单栏图标改用单色模板图（`assets/trayTemplate.png` + `@2x`，`setTemplateImage(true)`），
+  随浅色/深色菜单栏自动反色；此前是把 1254×1254 的彩色应用图标缩到 16px 塞进菜单栏，深色模式下观感是错的，
+  Retina 下也糊。图标由 `build/make-tray-icon.js` 零依赖生成（PNG 编码只用 Node 内置 zlib），资源可复现。
+  另外：macOS 上一旦 `setContextMenu`，`click` / `right-click` 就都不再触发，「点托盘回主窗」会失效——
+  现在 macOS 不设常驻菜单，改为左键回主窗、右键临时弹出；并用 `tray.setTitle()` 把剩余时间直接写在菜单栏上
+- **跨 Space 置顶**：小窗此前只设了 `alwaysOnTop`，在 macOS 上切到别的桌面或别人的全屏应用就会被盖住。
+  现在置顶时同步 `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })`。
+  **注意必须带 `skipTransformProcessType: true`**：不传时 Electron 会把进程类型转成 Accessory，
+  结果是 Chromium 认为该窗口不可见 → `document.hidden` 变 true → `src/timer/flow.js` 的 `start()`
+  直接 return，字符海动画整个停掉（真机复现：冒烟测试的「字符海渲染循环在跑 / 渲染帧率接近 120」
+  两项转红；`tools/ui-review.cjs` 的截图也看不到字符海）
+- **生命周期**：`app.setAppUserModelId` 加 `win32` 判断（macOS 上是空操作）；
+  macOS 上 `window-all-closed` 不再退出应用，交给已有的 `activate` 处理器（关窗后点 Dock 图标可唤回）
+
+### macOS 打包
+- `package.json` 新增 `mac` 构建配置：dmg + zip，arm64 与 x64 各一份，声明应用分类与产物名
+  （带 `${version}` 与 `${arch}`），开启强化运行时并配 `build/entitlements.mac.plist`
+- 新增 `build/mac-build.sh`（对照 `build/win-build.ps1`）：同样的四道测试闸 → 构建 →
+  用现成的 `tools/check-asar-runtime.js` 核对 `Sisyphus.app/Contents/Resources/app.asar` 与源码一致 →
+  输出产物大小与 SHA-256、`codesign` 状态。**没有证书时自动补 ad-hoc 签名**：
+  Apple Silicon 上未签名的 `.app` 会被系统判定为损坏、双击打不开，本地构建必须做这一步
+- 新增 npm 脚本 `dist:mac` / `dist:mac:dir`
+
+### 测试
+- 新增 `tests/macos-support.test.js`（30 项断言）：菜单模板必需 role 齐全、`main.js` 确实接上了菜单
+  （模块写了却没接线是静默失效）、菜单栏模板图标存在且尺寸正确
+- `tests/version-sync.test.js` 补 macOS 构建配置断言（12 → 20 项）
+- `tests/rework-electron.integration.cjs` 里用 `powershell.exe` 清理临时目录的那段改为按平台选 shell，
+  在 macOS 上原本必然失败
+- 回归套件 8 套 387 项 → **9 套 425 项**
+
+### 未做
+- 不加 macOS CI job：macOS runner 计费是 Linux 的 10 倍，是否接入应由维护者决定，
+  不在本 PR 里替项目增加持续成本。macOS 侧改为「本地构建脚本 + 真机验证记录」
+- 不做公证（需要 Apple Developer 账号）；签名与公证路线见 [docs/release.md](docs/release.md#代码签名)
+
 ## 2.0.0（2026-09-10）
 
 开源发布版本。**含破坏性变更**：技术命名统一为 `sisy-*`，并完成发布前的工程收口。

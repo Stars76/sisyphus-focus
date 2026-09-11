@@ -1,9 +1,9 @@
 # 西西弗斯 · 专注工作台
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Platform: Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%2F11-blue)
+![Platform: Windows 10/11 · macOS 12+](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B-blue)
 ![Electron: 33.4.11](https://img.shields.io/badge/Electron-33.4.11-47848F)
-![Version: 2.0.0](https://img.shields.io/badge/version-2.0.0-blue)
+![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)
 ![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20deps-0-success)
 
 [English](README.en.md) · 中文
@@ -13,7 +13,7 @@
 - **今日事** —— 任务管理（每日任务模板、月历、按日期分组、子步骤）
 - **专注钟** —— 纵向「字符海」倒计时（水面随进度下降），可弹成桌角常驻小窗
 
-没有系统标题栏：拖拽区、导航、最小化/最大化/关闭都在应用自己的标题栏里；计时状态在主窗标题栏实时可见，并可常驻**系统托盘**。
+没有系统标题栏：Windows 上拖拽区、导航、最小化/最大化/关闭都在应用自己的标题栏里，计时状态在主窗标题栏实时可见，并可常驻**系统托盘**；macOS 上改用系统红绿灯（`titleBarStyle: 'hidden'`），托盘图标走菜单栏单色模板图，计时状态可直接显示在菜单栏上。
 
 **完全本地**：不发一个网络请求、没有账号、没有遥测。所有数据就是你磁盘上的一个 JSON 文件。
 
@@ -27,12 +27,12 @@
 
 ## 下载与安装（无需命令行）
 
-从本仓库 **Releases** 页面下载 Windows x64 产物，双击即可：
+**Windows**：从本仓库 **Releases** 页面下载 x64 产物，双击即可：
 
 | 文件 | 说明 |
 |------|------|
-| `Sisyphus-2.0.0-setup.exe` | 安装版：装到 `%LOCALAPPDATA%\Programs`，创建桌面与开始菜单快捷方式（名称「西西弗斯」），**卸载保留用户数据** |
-| `Sisyphus-2.0.0-portable.exe` | 免安装版：双击直接运行，数据同样在 `%APPDATA%\Sisyphus` |
+| `Sisyphus-2.1.0-setup.exe` | 安装版：装到 `%LOCALAPPDATA%\Programs`，创建桌面与开始菜单快捷方式（名称「西西弗斯」），**卸载保留用户数据** |
+| `Sisyphus-2.1.0-portable.exe` | 免安装版：双击直接运行，数据同样在 `%APPDATA%\Sisyphus` |
 
 > **产物未做代码签名**（本项目没有购买代码签名证书），首次运行 SmartScreen 可能提示「未知发布者」，
 > 点「更多信息 → 仍要运行」即可。校验完整性请对照 Release 里的 `SHA256SUMS.txt`。
@@ -40,6 +40,20 @@
 >
 > 签名管线已经接好（`CSC_LINK` / Azure Trusted Signing / `npm run verify:signature`），
 > 拿到证书后构建产物即可带上可信签名，详见 [docs/release.md](docs/release.md#代码签名)。
+
+**macOS**：Releases 里暂时只有 Windows 产物（CI 只跑 Windows，原因见「已知限制」），
+macOS 走源码本地构建。Apple Silicon 与 Intel 都支持，产物是 dmg + zip：
+
+```bash
+git clone https://github.com/Stars76/sisyphus-focus.git
+cd sisyphus-focus
+bash build/mac-build.sh          # 先跑四道测试闸，再打包到 release/
+open release/mac-arm64/Sisyphus.app
+```
+
+构建脚本在没找到证书时会自动补一次 **ad-hoc 签名**——Apple Silicon 上未签名的 `.app`
+系统会直接判定为损坏、双击打不开，所以这一步不是可选项。要做正式对外分发的签名与公证
+（`CSC_LINK` / 强化运行时 / entitlements）见 [docs/release.md](docs/release.md#代码签名)。
 
 ---
 
@@ -62,7 +76,7 @@
 | 问题 | 现在的做法 |
 |------|-----------|
 | 双实例计时冲突 | 计时状态只有一份，住在主进程（`src/main/timer.js`）；两个窗口只能发命令、订阅广播 |
-| 数据可靠性 | 主进程唯一写者（`src/main/store.js`）→ `%APPDATA%\Sisyphus\sisy-store.json`，原子写 + 滚动备份 + 导入导出 |
+| 数据可靠性 | 主进程唯一写者（`src/main/store.js`）→ 数据目录下的 `sisy-store.json`（Windows `%APPDATA%\Sisyphus`，macOS `~/Library/Application Support/Sisyphus`），原子写 + 滚动备份 + 导入导出 |
 | 单文件堆逻辑 | 拆成 `shared/` + `main/` + `todo/` + `timer/` 模块，页面 HTML 只留结构与样式 |
 
 ```
@@ -72,7 +86,7 @@
 ├── preload.js                  # 按用途分组的桥：dshWindow dshStore dshTimer dshData dshLog dshApp
 ├── smoke.js                    # 冒烟入口（必须以项目根作为 app path 启动）
 ├── package.json                # Electron 33.4.11 锁定；零运行时依赖（dependencies 为空）
-├── assets/                     # 应用图标 + 标题栏 logo
+├── assets/                     # 应用图标 + 标题栏 logo + macOS 菜单栏模板图
 ├── electron/                   # 解压版 Electron 运行时（不入库，npm start 优先复用它）
 ├── src/
 │   ├── main/
@@ -80,7 +94,9 @@
 │   │   ├── schema.js           # 已知存储键的结构校验 + 导入摘要 + 分区映射
 │   │   ├── migrations.js       # 版本化迁移链（幂等，留迁移日志）
 │   │   ├── timer.js            # 唯一计时状态机（显式转换 / 暂停 / 统计 / 抗改表）
+│   │   ├── alarm.js            # 任务闹钟调度器（按 HH:MM 扫「今天」，到点发系统通知）
 │   │   ├── tray.js             # 系统托盘
+│   │   ├── menu.js             # 应用菜单模板（仅 macOS：缺它 Cmd+Q/C/V 等系统快捷键全失效）
 │   │   ├── ipc.js              # IPC 注册 + 对话框 + 日志文件
 │   │   └── util.js             # 日期与时间格式化
 │   ├── shared/
@@ -100,41 +116,48 @@
 │   ├── smoke-test.js           # 真机冒烟（真开两个窗口验证一致性）
 │   ├── ui-review.cjs           # 真实 Electron UI 验收（31 项检查 + 截图）
 │   └── check-asar-runtime.js   # 校验新文件有没有被打进 asar
-├── tests/                      # 回归套件（8 套，共 387 项断言）
+├── tests/                      # 回归套件（9 套，共 425 项断言）
 ├── docs/                       # 数据与恢复 / 发布打包 / 故障诊断 / 仓库配置
-└── build/                      # Windows 一键构建 + 签名核验脚本
+└── build/                      # 一键构建 + 签名核验脚本（Windows: win-build.ps1 / macOS: mac-build.sh）
 ```
 
 ---
 
 ## 从源码启动（开发）
 
-> 只是想**用这个应用**的话不用看这里 —— 双击 Release 里的 exe 即可。
+> 只是想**用这个应用**的话不用看这里 —— Windows 双击 Release 里的 exe，
+> macOS 按上文 `build/mac-build.sh` 打一个本地 `.app`。
 
-```powershell
+```bash
 npm install        # 首次：拉取 Electron 运行时
 npm start          # 启动主窗（今日事）
 npm run compact    # 直接启动专注钟小窗
 ```
 
 - 启动器 `tools/launch.js` 优先使用仓库内 `electron/` 解压版运行时（有就免下载），否则回退 `node_modules`。
-- 打包成 exe：`powershell -File build\win-build.ps1`，产物在 `release\`（详见 [docs/release.md](docs/release.md)）。
+- 打包：Windows 用 `powershell -File build\win-build.ps1`（产物在 `release\`）；
+  macOS 用 `bash build/mac-build.sh`（产物在 `release/mac-arm64/`）。
+  两者都先跑同一组测试闸，详见 [docs/release.md](docs/release.md)。
 
 ### 验证命令
 
-| 命令 | 作用 | 本机实测 |
+| 命令 | 作用 | 本机实测（macOS 26 / Apple Silicon） |
 |------|------|----------|
-| `npm run check` | 静态检查：语法 / 脚本引用 / id 存在性（含 `tools/*.cjs` 里引用的元素）/ 加载顺序 | 43 个 JS·CJS 文件、3 个页面、61 处工具脚本 id 引用全部通过 |
-| `npm run check:links` | 文档检查：Markdown 里的相对路径与 `#锚点` 是否真的存在 | 12 个文件 / 60 条链接全部有效 |
+| `npm run check` | 静态检查：语法 / 脚本引用 / id 存在性（含 `tools/*.cjs` 里引用的元素）/ 加载顺序 | 47 个 JS·CJS 文件、3 个页面、61 处工具脚本 id 引用全部通过 |
+| `npm run check:links` | 文档检查：Markdown 里的相对路径与 `#锚点` 是否真的存在 | 12 个文件 / 66 条链接全部有效 |
 | `npm test` | 纯 Node 逻辑自检：日期、存储、计时状态机、任务数据层 | 119 项通过 |
-| `npm run test:regression` | 回归套件 | 8 套 / 387 项断言 |
+| `npm run test:regression` | 回归套件 | 9 套 / 425 项断言 |
 | `npm run verify` | 上面几项串起来（**提交前的总闸门，CI 用的就是它**） | — |
 | `npm run smoke` | 真机冒烟：真开两个窗口验证同一份计时状态 | 29 项检查通过，结果写 `tools/smoke-result.json` |
-| `electron tools/ui-review.cjs after` | 真实 Electron UI 验收：截图 + 布局断言 | 31/31 项通过，产物在 `.tmp/ui-review-out/after/` |
-| `npm run verify:signature` | 核验 `release/` 里产物签名状态 | 见 [docs/release.md](docs/release.md#代码签名) |
+| `electron tools/ui-review.cjs after` | 真实 Electron UI 验收：截图 + 布局断言 | 27/31 项通过，产物在 `.tmp/ui-review-out/after/` |
+| `npm run verify:signature` | 核验 Windows `release/` 里产物签名状态 | 见 [docs/release.md](docs/release.md#代码签名) |
 
 > `tests/packaging-parity.test.js` 需要**已安装依赖**的环境（会调用 asar 检查打包一致性）；
-> 没装依赖时它会报错，其余 7 套共 381 项断言不依赖任何第三方包。
+> 没装依赖时它会报错，其余 8 套共 419 项断言不依赖任何第三方包。
+>
+> `ui-review` 的 31 项里有 4 项（任务行发起专注 / 受信渲染层不得切换进行中的任务 /
+> 230×300 下长标题不遮挡 / 同一任务从任务行恢复）在当前 `main` 上就是红的，与平台无关，
+> 本仓库没动它们，见 [ROADMAP](ROADMAP.md)。
 
 ---
 
@@ -144,7 +167,7 @@ npm run compact    # 直接启动专注钟小窗
 
 ```
 main.js
-  └── src/main/timer.js  ← 唯一状态（内存 + %APPDATA%\Sisyphus\sisy-store.json）
+  └── src/main/timer.js  ← 唯一状态（内存 + 数据目录下的 sisy-store.json）
         ├── 主窗标题栏状态条          只读订阅
         └── 专注钟小窗（可置顶）       只读订阅
 ```
@@ -211,7 +234,7 @@ main.js
 
 ## 数据
 
-**全部数据在主进程**，文件是 `%APPDATA%\Sisyphus\sisy-store.json`（`userData` 按 productName 命名；路径可在「今日事 → ⚙ 设置 → 数据备份」里看到）：
+**全部数据在主进程**，文件是数据目录下的 `sisy-store.json`（`userData` 按 productName 命名：Windows 是 `%APPDATA%\Sisyphus`，macOS 是 `~/Library/Application Support/Sisyphus`；路径可在「今日事 → ⚙ 设置 → 数据备份」里看到）：
 
 | 键 | 内容 |
 |----|------|
@@ -239,7 +262,7 @@ main.js
 
 ## 开发
 
-改完在应用里 `Ctrl+R` 刷新即生效（主进程代码需重启应用）。
+改完在应用里 `Ctrl+R`（macOS 为 `⌘R`）刷新即生效（主进程代码需重启应用）。
 
 | 位置 | 说明 |
 |------|------|
@@ -267,8 +290,12 @@ main.js
 
 ## 已知限制
 
-- **仅 Windows 10/11 x64**：白窗口自绘标题栏、托盘、电源事件都针对 Windows 调过；其他平台未验证
-- **产物默认未签名**（项目没有代码签名证书）→ SmartScreen 会提示「未知发布者」；签名管线已就绪；免费路线（Microsoft Store 重签 / SignPath Foundation）与付费路线、资格限制见 [docs/release.md](docs/release.md#代码签名)
+- **平台**：Windows 10/11 x64 与 macOS 12+（arm64 / x64）已适配并真机验证；Linux 未做，未验证
+- **macOS 不发布二进制**：CI 只跑 `windows-2022`（macOS runner 计费是 Linux 的 10 倍，是否接入由维护者决定），
+  所以 macOS 用户需要本地 `bash build/mac-build.sh` 自己构建。构建脚本在没有证书时会自动 ad-hoc 签名，本地可直接双击运行
+- **macOS 上通知需要已签名**：未签名或未公证的构建里，系统通知可能被静默丢弃（本地 ad-hoc 签名通常可用）；
+  正式分发需要 Developer ID 签名 + 公证
+- **产物默认未签名**（项目没有代码签名证书）→ Windows SmartScreen 会提示「未知发布者」；签名管线已就绪；免费路线（Microsoft Store 重签 / SignPath Foundation）与付费路线、资格限制见 [docs/release.md](docs/release.md#代码签名)
 - 本机未开 Windows 开发者模式时，winCodeSign 解压软链会失败 → 构建脚本自动降级 `signAndEditExecutable=false`（exe 内嵌图标/元数据用 Electron 默认值，产物仍可运行；CI 上走完整路径）
 - 托盘**不做**「空闲时阻止系统睡眠」：合盖、手动睡眠仍会中断专注（挂起期间的完成会在唤醒后补记）
 - 中断记录已落盘并可视化汇总，但还没有「我经常在什么时候中断」的细粒度分析

@@ -6,6 +6,8 @@
 //   src/main/store.js    权威数据存储（唯一写者，userData/sisy-store.json）
 //   src/main/timer.js    唯一计时状态机（主窗内嵌视图与小窗都只是显示端）
 //   src/main/tray.js     托盘常驻
+//   src/main/alarm.js    任务闹钟调度器
+//   src/main/menu.js     应用菜单模板（仅 macOS：缺它则 Cmd+Q/C/V 等系统快捷键失效）
 //   src/main/ipc.js      全部 IPC 注册
 'use strict';
 
@@ -17,7 +19,12 @@ const { createTimer } = require('./src/main/timer');
 const { createTray } = require('./src/main/tray');
 const { createIpc } = require('./src/main/ipc');
 const { createAlarm } = require('./src/main/alarm');
+const macMenu = require('./src/main/menu');
 const util = require('./src/main/util');
+
+// 平台分支集中在这里，便于一眼看出哪些行为是按平台分的
+const IS_MAC = process.platform === 'darwin';
+const IS_WIN = process.platform === 'win32';
 
 let win = null;        // 主窗口
 let timerWin = null;   // 专注钟紧凑小窗
@@ -85,14 +92,21 @@ function reloadAll() {
 }
 
 function createWindow() {
-  win = new BrowserWindow({
+  // 窗口外观按平台分：
+  //   macOS  保留 frame，用 titleBarStyle:'hidden' 隐去标题栏但由系统绘制红绿灯，
+  //          再借 trafficLightPosition 把三颗按钮在 56px 标题栏里垂直居中；
+  //          渲染层据此隐藏自绘按钮并让出左侧位置（见 src/shell.css）。
+  //  其它平台 无边框 + 自绘标题栏按钮（原有行为，不变）。
+  const chrome = IS_MAC
+    ? { frame: true, titleBarStyle: 'hidden', trafficLightPosition: { x: 18, y: 21 } }
+    : { frame: false, titleBarStyle: 'hidden' };
+
+  win = new BrowserWindow(Object.assign({
     width: 1060,
     height: 780,
     minWidth: 720,
     minHeight: 560,
     show: false,
-    frame: false,
-    titleBarStyle: 'hidden',
     backgroundColor: '#F0F4F8',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
@@ -104,7 +118,7 @@ function createWindow() {
       nodeIntegrationInSubFrames: true,
       sandbox: false
     }
-  });
+  }, chrome));
 
   win.loadFile('index.html');
   win.once('ready-to-show', () => win.show());
@@ -135,7 +149,9 @@ function createWindow() {
           if (Notification.isSupported()) {
             new Notification({
               title: '西西弗斯 仍在后台运行',
-              body: '专注钟继续计时。右键任务栏托盘图标可开始/暂停或退出。',
+              body: IS_MAC
+                ? '专注钟继续计时。点菜单栏图标可回到主窗，右键可开始/暂停或退出。'
+                : '专注钟继续计时。右键任务栏托盘图标可开始/暂停或退出。',
               silent: true
             }).show();
           }
@@ -219,6 +235,14 @@ function createTimerWindow() {
     }
   });
   timerWin.setAlwaysOnTop(true, 'floating');
+  // macOS 上「置顶」默认只对创建它的那个 Space 生效，切到别的桌面或别人的全屏应用时会被盖住；
+  // 显式声明跨 Space + 全屏可见，才对得上界面里「置顶」按钮的承诺（见 src/main/ipc.js pin-toggle）。
+  //
+  // skipTransformProcessType 必须带上：不传时 Electron 会把进程类型转成 Accessory，
+  // 结果是 Chromium 认为该窗口不可见 → 渲染层的 document.hidden 变 true →
+  // src/timer/flow.js 的 start() 直接 return，字符海动画整个停掉
+  // （真机复现：tools/smoke-test.js 的「字符海渲染循环在跑 / 渲染帧率接近 120」两项转红）。
+  if (IS_MAC) timerWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   timerWin.loadFile('src/timer/index.html', { query: { compact: '1' } });
   timerWin.once('ready-to-show', () => timerWin.show());
   timerWin.on('closed', () => { timerWin = null; });
@@ -245,7 +269,8 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.setAppUserModelId('com.sisyphus.studio');
+// AppUserModelID 只对 Windows 有意义（任务栏分组与通知归属）；其它平台上是空操作
+if (IS_WIN) app.setAppUserModelId('com.sisyphus.studio');
 
 /* ============================================================
  * 启动装配
@@ -288,6 +313,8 @@ app.whenReady().then(() => {
     log: log,
     timer: timer,
     iconPath: path.join(__dirname, 'assets', 'icon.png'),
+    // macOS 菜单栏专用单色模板图（生成脚本见 build/make-tray-icon.js）
+    templatePath: path.join(__dirname, 'assets', 'trayTemplate.png'),
     onShowMain: () => showMainWindow(),
     onOpenCompact: () => createTimerWindow(),
     onQuit: () => { isQuitting = true; app.quit(); }
@@ -351,11 +378,21 @@ app.whenReady().then(() => {
     return p;
   });
 
-  // 去掉默认菜单栏（Windows 上 Alt 会露出菜单）
-  try { Menu.setApplicationMenu(null); } catch (e) { }
+  // 应用菜单：
+  //   Windows 上去掉（Alt 会露出系统菜单，与自绘标题栏冲突）。
+  //   macOS 必须留一份最小菜单——系统菜单栏承担着 Cmd+Q / Cmd+C / Cmd+V / Cmd+X /
+  //   Cmd+A / Cmd+W / Cmd+M / Cmd+H，菜单被移除后这些快捷键会全部失效，
+  //   连退出应用都只能用托盘菜单。模板见 src/main/menu.js。
+  try {
+    if (IS_MAC) Menu.setApplicationMenu(Menu.buildFromTemplate(macMenu.buildDarwinTemplate(app.getName())));
+    else Menu.setApplicationMenu(null);
+  } catch (e) { log('设置应用菜单失败', e); }
 });
 
 app.on('window-all-closed', () => {
+  // macOS 惯例：关掉窗口不退出应用，留在 Dock 里；点 Dock 图标由下面的 activate 重新开窗。
+  // 若在这里退出，「关闭窗口后从 Dock 唤回」这条 macOS 用户的基本预期就没了。
+  if (IS_MAC) return;
   // 托盘还在就继续常驻，否则退出
   if (tray && tray.exists && !isQuitting) return;
   app.quit();

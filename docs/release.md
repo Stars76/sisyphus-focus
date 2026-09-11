@@ -1,4 +1,4 @@
-# 发布与打包（Windows x64）
+# 发布与打包（Windows x64 / macOS）
 
 ## 依赖与版本
 
@@ -6,7 +6,7 @@
 - `electron-builder`（devDep）——首次构建时自动下载 Electron 发行包与 NSIS 工具链，
   镜像已在 `.npmrc` 固定：`electron_mirror` / `electron_builder_binaries_mirror` = npmmirror
 - `@electron/asar`（devDep）——`tests/packaging-parity.test.js` 与 `tools/check-asar-runtime.js` 用它读取打包内的文件清单
-- 缓存位置：`%LOCALAPPDATA%\electron-builder\Cache`（与仓库路径无关）；CI 上这条路径走 `actions/cache`
+- 缓存位置：Windows 是 `%LOCALAPPDATA%\electron-builder\Cache`，macOS 是 `~/Library/Caches/electron-builder`（与仓库路径无关）；CI 上这条路径走 `actions/cache`
 
 > 本机 `node_modules/electron` 若只有壳（安装时跳过了二进制下载），可直接用仓库内解压版运行时：
 > `.\electron\electron.exe tools\ui-review.cjs after`。
@@ -35,6 +35,36 @@ powershell -ExecutionPolicy Bypass -File build\win-build.ps1 -Targets portable
    默认核验 `release/current-build/app.asar`；若缺则回退 `release/win-unpacked/resources/app.asar`（旧目标，不代表本轮代码）。
 
 手动等价命令：`npm run dist`（portable）、`npm run dist:nsis`、`npm run dist:all`。
+
+### macOS 构建
+
+```bash
+bash build/mac-build.sh              # 默认 dmg + zip，arm64 与 x64 各一份
+bash build/mac-build.sh --dir        # 只要未打包的 .app，本地自测最快
+bash build/mac-build.sh --skip-tests # 跳过四道闸（仅调试）
+```
+
+脚本行为（对照上面的 Windows 脚本）：
+
+1. 同一组四道闸：`tools/check-syntax.js`、`tools/check-links.js`、`tools/selftest.js`、`tests/run-all.js`
+2. 依赖缺失时 `npm install`
+3. `npx electron-builder --mac`，产物落在 `release/mac-arm64/`（或 `mac/`、`mac-universal/`），
+   与 Windows 产物同目录、文件名不重叠
+4. **没有证书时自动补 ad-hoc 签名**（`codesign --force --deep --sign -`）。
+   这一步不是可选项：Apple Silicon 上未签名的 `.app` 会被系统判定为损坏、双击打不开。
+   检测到 `CSC_LINK` 却没签出证书签名时直接失败，口径与 Windows 侧一致
+5. **同一份 asar 一致性校验**：把 `Sisyphus.app/Contents/Resources/app.asar` 拷到
+   `release/current-build/app.asar` 后调 `node tools/check-asar-runtime.js`，
+   所以 `docs/diagnostics.md` 里那条相对路径命令对两个平台都成立
+6. 打印 `.app` 的签名状态（证书主体或 adhoc）以及每个 dmg/zip 的大小与 SHA-256
+
+手动等价命令：`npm run dist:mac`、`npm run dist:mac:dir`。
+
+**签名与公证**：macOS 不用 Authenticode，而用 Developer ID 签名 + 公证（notarization）。
+`package.json` 的 `mac` 段已开 `hardenedRuntime` 并配好 `build/entitlements.mac.plist`
+（Electron 的 V8 需要 JIT 相关授权），导出 `CSC_LINK` / `CSC_KEY_PASSWORD`（或让
+electron-builder 从钥匙串自动找身份）即可签出；公证需要 Apple Developer 账号，
+`@electron/notarize` 或 `notarytool` 的接入尚未做。
 
 ## 代码签名
 
@@ -219,7 +249,9 @@ CI 里 release / continuous / PR 三条流水线都会打印签名状态；**配
 | `.github/workflows/release.yml` | `v*` tag、手动 | 同上构建口径，产出并发布正式 Release（`RELEASE_NOTES.md` + 两个 exe + SHA256SUMS.txt） |
 | `.github/workflows/continuous-release.yml` | push 到 main/master | 构建并覆盖滚动 Release（tag `continuous`）；纯文档改动（`**.md`、`docs/**`）自动跳过以省额度 |
 
-- runner 固定 `windows-2022`（Electron 需要真实桌面会话；Linux runner 起不了带 GPU 的窗口）
+- runner 固定 `windows-2022`（Electron 需要真实桌面会话；Linux runner 起不了带 GPU 的窗口）。
+  **macOS 没有接入 CI**：macOS runner 的计费是 Linux 的 10 倍，是否长期承担这笔开销应由维护者决定，
+  所以 macOS 侧走 `build/mac-build.sh` 本地构建 + 真机验证，产物不随 Release 发布
 - `actions/setup-node` 开 npm 缓存，另有一步单独缓存 Electron / electron-builder 的下载目录
 - 脚本在 `CI=true` 时会为 Electron 追加 `--disable-gpu` 等开关，避免 runner 上没有显卡导致的帧率与截图抖动
 - 若某条流水线在 GitHub 上首次运行报错，先看失败步骤上传的
