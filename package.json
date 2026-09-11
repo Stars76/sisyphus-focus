@@ -1,7 +1,7 @@
 {
   "name": "sisyphus-focus",
   "productName": "Sisyphus",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "西西弗斯 · 专注工作台：本地优先的 Windows 桌面专注工具（今日事任务管理 + 字符海专注钟），无网络请求、无遥测",
   "main": "main.js",
   "author": {
