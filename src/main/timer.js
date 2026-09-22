@@ -614,6 +614,7 @@ function createTimer(deps) {
       prefs.phases.focus = sec;
       savePrefs();
       if (timer.phase === 'focus') {
+        const boundTask = timer.task;   // 绑定任务后选时长：任务绑定随之保留（绑定→选时长→开跑）
         if ((timer.running || timer.startedAt) && !rejecting) {
           rejecting = true;
           try { abandon(); } finally { rejecting = false; }
@@ -622,6 +623,8 @@ function createTimer(deps) {
         timer.totalSec = sec;
         timer.leftMs = sec * 1000;
         timer.plan = null;
+        timer.task = boundTask || null;
+        timer.awaitPlan = false;
         timer.round = stats.rounds + 1;
       }
       persist(true);
@@ -637,12 +640,14 @@ function createTimer(deps) {
         rejecting = true;
         try { abandon(); } finally { rejecting = false; }
       }
+      const boundTask = timer.task;   // 绑定任务后选计划：任务绑定随之保留（绑定→选计划→开跑）
       const steps = expandPlan(def);
       timer = newTimer(steps[0].phase);
       timer.totalSec = steps[0].sec;
       timer.leftMs = steps[0].sec * 1000;
       timer.plan = { key: def.key, name: def.name, steps: steps, index: 0 };
       timer.awaitPlan = false;             // 用户从选择器选定计划后不再自动弹
+      timer.task = boundTask || null;
       timer.round = stats.rounds + 1;
       persist(true);
       broadcast();

@@ -10,8 +10,9 @@
 
 Two small focus tools, packed into a single **frameless Electron desktop app**:
 
-- **今日事** (Today, the task view) — task management (daily task templates, a month calendar, grouping by date, sub-steps)
-- **专注钟** (Focus Clock) — a vertical "character sea" countdown (the water level sinks as progress advances), which can pop out into an always-resident desk-corner mini window
+- **今日事** (Today, the task view) — task management (daily task templates, a month calendar, grouping by date, sub-steps, per-task alarms, unfinished tasks roll over to the next day)
+- **专注钟** (Focus Clock) — a vertical "character sea" countdown (the water level sinks as progress advances), with multi-round pomodoro plans that advance automatically, which can pop out into an always-resident desk-corner mini window
+- **每日时间轴** (Daily timeline) — what you did in which time slices of the day; customizable MD templates export notes with one click (Obsidian / Notion ready)
 
 No system title bar: the drag region, navigation, and minimize/maximize/close all live in the app's own title bar; timer status is visible in real time in the main window's title bar and can stay resident in the **system tray**.
 
@@ -79,7 +80,8 @@ The three main threads now:
 │   │   ├── store.js            # Authoritative storage (atomic writes / backups / import validation / corruption recovery / per-partition wipes)
 │   │   ├── schema.js           # Structure validation for known storage keys + import summary + partition map
 │   │   ├── migrations.js       # Versioned migration chain (idempotent, keeps a migration log)
-│   │   ├── timer.js            # The one timer state machine (explicit transitions / pause / statistics / clock-tamper resistance)
+│   │   ├── timer.js            # The one timer state machine (explicit transitions / pause / statistics / clock-tamper resistance / multi-round plan advance)
+│   │   ├── alarm.js            # Task-alarm scheduler (scans every 15s, fires a system notification once per day per moment)
 │   │   ├── tray.js             # System tray
 │   │   ├── ipc.js              # IPC registration + dialogs + log files
 │   │   └── util.js             # Date and time formatting
@@ -90,7 +92,8 @@ The three main threads now:
 │   │   ├── toast.js            # Toasts (save failures, etc.)
 │   │   ├── dialog.js           # Lightweight dialogs (focus trap / Esc to close)
 │   │   ├── icons.js            # Hand-written sisy-icon icons
-│   │   └── statistics.js       # Calendar week/month stat aggregation (pure functions, unit-testable)
+│   │   ├── statistics.js       # Calendar week/month stat aggregation + daily timeline derivation (pure functions, unit-testable)
+│   │   └── template.js         # Note-template engine (scalar/loop substitution, shared by main and renderer)
 │   ├── todo/                   # 今日事: state.js data layer / render.js rendering / app.js interactions
 │   └── timer/                  # 专注钟: flow.js character sea / ui.js interface / audio.js chime / state.js read-only mirror
 ├── tools/
@@ -100,7 +103,7 @@ The three main threads now:
 │   ├── smoke-test.js           # Real-machine smoke test (actually opens both windows to verify consistency)
 │   ├── ui-review.cjs           # Real-Electron UI acceptance (31 checks + screenshots)
 │   └── check-asar-runtime.js   # Verifies new files actually made it into the asar
-├── tests/                      # Regression suites (8 suites, 387 assertions total)
+├── tests/                      # Regression suites (9 suites, 436 assertions total)
 ├── docs/                       # Data & recovery / release packaging / troubleshooting / repo configuration
 └── build/                      # Windows one-click build + signature-verification scripts
 ```
@@ -125,12 +128,12 @@ npm run compact    # Launch the 专注钟 mini window directly
 | Command | What it does | Verified locally |
 |---------|--------------|------------------|
 | `npm run check` | Static checks: syntax / script references / id existence (including element ids referenced from `tools/*.cjs`) / load order | 43 JS·CJS files, 3 pages and 61 tool-script id references all pass |
-| `npm run check:links` | Docs check: every relative path and `#anchor` in the Markdown actually exists | 12 files / 60 links all valid |
+| `npm run check:links` | Docs check: every relative path and `#anchor` in the Markdown actually exists | 12 files / 62 links all valid |
 | `npm test` | Pure-Node logic self-test: dates, storage, timer state machine, task data layer | 119 assertions pass |
-| `npm run test:regression` | Regression suite | 8 suites / 387 assertions |
+| `npm run test:regression` | Regression suite | 9 suites / 436 assertions |
 | `npm run verify` | Chains the checks above (**the master gate before committing — it's what CI runs**) | — |
 | `npm run smoke` | Real-machine smoke test: actually opens both windows to verify one shared timer state | 29 checks pass; results written to `tools/smoke-result.json` |
-| `electron tools/ui-review.cjs after` | Real-Electron UI acceptance: screenshots + layout assertions | 31/31 checks pass; artifacts in `.tmp/ui-review-out/after/` |
+| `electron tools/ui-review.cjs after` | Real-Electron UI acceptance: screenshots + layout assertions | 34/34 checks pass; artifacts in `.tmp/ui-review-out/after/` |
 | `npm run verify:signature` | Verifies the signing status of artifacts in `release/` | See [docs/release.md](docs/release.md#代码签名) |
 
 > `tests/packaging-parity.test.js` requires an environment with **dependencies installed** (it calls asar to check packaging parity);
@@ -155,20 +158,33 @@ main.js
 
 ### The Interface
 
-A status badge (`待机中 (Idle) / 专注中 (Focusing) / 已暂停 (Paused) / 恢复中 (Resuming) / 短休息 (Short break) / 长休息 (Long break)` — in-progress states also carry the remaining time), the task name, a large remaining-time readout, this-round duration buttons, and start/pause/reset; the settings panel can enable a chime, system notifications, animation levels, high contrast, showing seconds, and tray residency. **When paused, the character sea is completely still** (even the rAF loop is stopped), so it can never look like it's still running.
+A status badge (`待机中 (Idle) / 专注中 (Focusing) / 已暂停 (Paused) / 恢复中 (Resuming) / 短休息 (Short break) / 长休息 (Long break)` — in-progress states also carry **this round's configured duration** (e.g. `专注中 · 45:00`, fixed; the remaining countdown lives in the large central digits), a large remaining-time readout, the plan/duration button (showing the current plan name or minutes), and start/pause/reset; the Focus Clock no longer shows the task name (the binding is kept — completed minutes are still credited back to the task). The settings panel can enable a chime, system notifications, animation levels, high contrast, showing seconds, and tray residency. **When paused, the character sea is completely still** (even the rAF loop is stopped), so it can never look like it's still running.
 
-### Phases (Switched Manually, No Auto-Chaining)
+### Single Segments & Multi-Round Plans
 
-`Focus 25 / Short break 5 / Long break 15`, with presets of 5/10/15/25/45 or a custom 1–180 minutes. When a break ends it only notifies — it never auto-starts the next round.
+**Single segment**: `Focus 25 / Short break 5 / Long break 15`, with quick presets of 25/45 or a custom 1–180 minutes. When a break ends it only notifies — it never auto-starts the next round.
+
+**Multi-round plans** (pomodoro method): each of four presets expands into a segment queue that **advances automatically** (focus → short break → … → focus → long break), no intervention needed:
+
+| Plan | Structure | Segments |
+|------|-----------|----------|
+| 标准番茄 (Classic) | 25 focus ×4, 5 short breaks between, 15 long break at the end | 8 |
+| 深专注 (Deep) | 45 focus ×2, 5 short breaks between, 15 long break at the end | 4 |
+| 短冲刺 (Sprint) | 15 focus ×4, 3 short breaks between, 10 long break at the end | 8 |
+| 长跑 (Marathon) | 50 focus ×2, 10 short breaks between, 20 long break at the end | 4 |
+
+Mid-plan segments **do not show the completion screen** (a toast + system notification announces the next segment); the completion screen only appears when the whole plan finishes. Abandoning / resetting / changing duration / switching phase / switching plans mid-way terminates the plan (the in-progress round first gets an abandoned history entry); if the timer expires while the app is closed it is silently back-filled, which also ends the plan.
 
 ### Completion Flow
+
+(Shown in single-segment mode or when a whole plan finishes; mid-plan segments skip it)
 
 - **再来一轮 (One more round)** / **休息 5 分钟 (Break for 5 minutes)** / **返回专注钟 (Back to the Focus Clock)**
 - Expand "查看本轮记录" (view this round's record): planned duration / actual time / whether it was paused (count + total paused time) / start and end moments
 
 ### Interruption History
 
-At the end of every round (completed or abandoned) one entry is appended to `sisy-timer-history` (at most 300 entries): `date / phase / start time / end time / planned minutes / actual minutes / pause count / paused minutes / outcome`. The "专注统计" (focus stats) view inside 今日事 totals minutes, rounds, and task counts by **calendar week / calendar month**, along with streak days and the peak time of day (rounds completed after resuming are included, grouped by their starting time slot).
+At the end of every segment (completed or abandoned; break segments inside a plan each get their own entry) one entry is appended to `sisy-timer-history` (at most 300 entries): `date / phase / start time / end time / planned minutes / actual minutes / pause count / paused minutes / outcome`. The "专注统计" (focus stats) view inside 今日事 totals minutes, rounds, and task counts by **calendar week / calendar month**, along with streak days and the peak time of day (rounds completed after resuming are included, grouped by their starting time slot).
 
 ### Robustness Against Time Anomalies
 
@@ -177,9 +193,9 @@ At the end of every round (completed or abandoned) one entry is appended to `sis
 - Falls back to the wall clock automatically if the monotonic clock misbehaves
 - Runs keep going across midnight; statistics are recorded under **the date of the moment of completion**
 - Sleep/wake and lock/unlock both trigger an immediate recalculation
-- The timer expires while the window is closed → **silently back-filled after restart** (no chime, no notification)
+- The timer expires while the window is closed → **silently back-filled after restart** (no chime, no notification; a multi-round plan ends at the back-fill and does not auto-advance)
 - Completion events / statistics accumulation / history writes each **happen exactly once** (regression-covered in `tests/timer-correctness.test.js`)
-- Changing duration / switching phase / resetting mid-run: the in-progress round automatically gets an abandoned history entry — no more rounds vanishing without a trace
+- Changing duration / switching phase / switching plans / resetting mid-run: the in-progress round automatically gets an abandoned history entry — no more rounds vanishing without a trace
 
 ### Animation & Readability
 
@@ -201,11 +217,31 @@ At the end of every round (completed or abandoned) one entry is appended to `sis
 
 ## 今日事 (Today)
 
-- Tasks grouped by date with month-calendar navigation, plus sub-steps (small steps + minutes)
+- Tasks grouped by date with month-calendar navigation, plus sub-steps (a simple checklist)
+- **Unfinished tasks roll over automatically**: a regular task (not a daily one) that isn't finished moves into today's list the next day with a "顺延" (rolled-over) badge showing its origin day, pinned to the top until it's done or deleted. Daily tasks regenerate each day on their own and never roll over
 - All sub-steps done → the parent task auto-completes; unchecking any sub-step → the parent task reverts
+- **Task alarms**: set an `HH:MM` reminder on any task row; the main process fires a system notification when the moment arrives (scanned every 15 seconds, ±15 s accuracy). Completed tasks never fire, and the same task at the same moment rings at most once per day
+- Status summaries (⏱ focus minutes, step progress, alarm time) live in compact pills at the right of the title row, without taking space from the task body
 - **Daily tasks**: configured in ⚙ settings; on first entry each day they automatically "materialize" into ordinary tasks in that day's list; **once deleted for the day they are not re-added** (recorded via `dismissedDaily`), and a fresh set is generated for each new day
-- Past dates remain editable: you can tick tasks complete, rename them, and add/remove/edit sub-steps and minutes; "add task / drag to reorder / tap to focus" is still limited to today
-- Every task has a one-click **Start Focus**: it binds the task title to the current timer round and credits the minutes back to that task on completion
+- Past dates remain editable: you can tick tasks complete, rename them, and add/remove/edit sub-steps; "add task / drag to reorder / tap to focus" is still limited to today
+- Every task has a one-click **Start Focus**: it first binds the task and opens the Focus Clock's plan picker — pick a plan or duration and press "Start" to begin; clicking again on a task bound to the current round simply **resumes it**; on completion the minutes are credited back to that task
+
+## 每日时间轴 (Daily Timeline)
+
+The "每日" (Daily) tab inside focus stats answers "what did I do in which time slices of this day":
+
+- Slices are **derived purely from `sisy-timer-history`** (no extra bookkeeping): adjacent focus segments of the same task (gap ≤ 15 minutes, planned breaks included) merge into one continuous slice (e.g. `08:00–10:20 writing the report`); interruptions (abandoned) get their own marked block; untagged focus shows as "未定任务的专注" (untagged focus)
+- A vertical timeline positions blocks by the minute; **overlapping slices sit side by side** (overlap is allowed); navigate across days
+- **The timeline is customizable**: edit a block's start/end, hide a mistaken block, or add a manual slice. Fixes live in the `sisy-timeline-overrides` overlay — they only correct the display; authoritative history and derived data stay untouched, and fixes survive recomputation
+
+## 笔记模板导出 (Note Templates — Obsidian / Notion)
+
+Minimal integration with **no API calls and zero network**: an **editable Markdown template with standard variable names**, rendered and then copied to the clipboard (paste into Notion / Obsidian) or saved as a `.md` file (drop it straight into an Obsidian vault).
+
+- Three built-in starters: **每日复盘 (Daily review) / 单任务记录 (Task record) / 周报 (Weekly report)**; edit, live-preview and reset under "⚙ 设置 → 笔记模板" (⚙ Settings → Note templates)
+- Variables (snake_case): `{{date}}` `{{date_cn}}` `{{weekday}}` `{{focus_minutes}}` `{{focus_rounds}}` `{{tasks_done_count}}` `{{task_title}}` `{{task_minutes}}` `{{week_since}}` `{{week_until}}` `{{streak}}` `{{peak_range}}` and more; loops `{{#timeline}}…{{/timeline}}`, `{{#tasks_done}}…{{/tasks_done}}` (inside: `{{start}}` `{{end}}` `{{title}}` `{{minutes}}`; `{{^list}}` empty-state supported); unknown variables are kept verbatim
+- Entry points: the daily-timeline toolbar (copy daily review / save .md / copy weekly report) and the "任务记录" (task record) button on each timeline block (single-task template)
+- Templates live in `sisy-export-template` (≤32KB each, falls back to defaults when corrupt) and travel with your backups/imports
 - Date keys are uniformly zero-padded `2026-09-08`; legacy `2026-9-8` keys are migrated automatically at load (merged under the same key)
 - Corrupt data is recognized, saved aside as `<key>__corrupt_<timestamp>`, and reset, with a log entry written
 
@@ -215,13 +251,15 @@ At the end of every round (completed or abandoned) one entry is appended to `sis
 
 | Key | Contents |
 |-----|----------|
-| `sisy-focus-state-v2` | 今日事 tasks (by date; includes daily-task materialization + `dismissedDaily`) |
+| `sisy-focus-state-v2` | 今日事 tasks (by date; includes daily-task materialization + `dismissedDaily` + per-task alarms `alarm` + roll-over origin `rolledFrom`) |
 | `sisy-daily-config` | Daily task templates |
-| `sisy-timer-state` | 专注钟 current state (phase / remaining / pause statistics) |
+| `sisy-timer-state` | 专注钟 current state (phase / remaining / pause statistics / multi-round plan `plan`) |
 | `sisy-timer-stats` | Today's focus statistics (rounds, minutes) |
 | `sisy-timer-run` | A running-state mirror kept for legacy-version reads |
 | `sisy-timer-prefs` | Sound / notifications / animation / high contrast / tray settings |
 | `sisy-timer-history` | Completion and interruption records (at most 300 entries) |
+| `sisy-timeline-overrides` | Timeline overlay (edited start/end, hidden blocks, manual slices) |
+| `sisy-export-template` | Note templates (daily review / task record / weekly report) |
 
 - Schema validation (`src/main/schema.js`) + versioned migrations (`src/main/migrations.js`); imports run "parse → validate → summarize → **back up exactly once** → write → verify on disk → refresh", rolling back automatically on failure, so bad data never enters the store
 - Each launch produces one `backups/sisy-store-YYYYMMDD.json`, keeping at most 10; if the main file is corrupt, recovery automatically tries `.tmp` / the most recent backup, and the corrupted original is preserved forever (recovery manual: [docs/data.md](docs/data.md) / [docs/diagnostics.md](docs/diagnostics.md))
@@ -245,7 +283,8 @@ After editing, `Ctrl+R` inside the app applies changes immediately (main-process
 |----------|------------|
 | `src/timer/flow.js` → `draw()` | Character-sea rendering: `RAMP` symbol ramp, `COLORS` palette, `cell` auto-sizing, sprite cache |
 | `src/timer/ui.js` → `render()` | Status badge / time / buttons / settings panel / completion screen |
-| `src/main/timer.js` | Timer state machine: commands, completion, statistics, time-anomaly resistance |
+| `src/main/timer.js` | Timer state machine: commands, completion, multi-round plan advance, statistics, time-anomaly resistance |
+| `src/main/alarm.js` | Task-alarm scheduler |
 | `src/main/store.js` | Storage: atomic writes, backups, import/export, corruption recovery |
 | `src/todo/state.js` / `render.js` | Task data layer / render layer |
 
@@ -271,6 +310,7 @@ Commit conventions, branch naming, and the official line on "why there is no ESL
 - **Artifacts are unsigned by default** (this project has no code signing certificate) → SmartScreen will warn "Unknown publisher"; the signing pipeline is ready; free routes (Microsoft Store re-signing / SignPath Foundation), paid routes and their eligibility limits are in [docs/release.md](docs/release.md#代码签名)
 - When Windows Developer Mode is off locally, winCodeSign fails to extract its symlink → the build script automatically degrades to `signAndEditExecutable=false` (the exe's embedded icon/metadata fall back to Electron defaults; the artifact still runs; CI takes the full path)
 - The tray does **not** do "prevent system sleep while idle": closing the lid or manually sleeping still interrupts a focus round (completions during suspension are back-filled on wake)
+- Task alarms only fire while the app is running (closing windows to the tray still counts): they never fire while the app is closed, and moments missed during sleep/shutdown are not back-filled
 - Interruption records are persisted and summarized visually, but there is not yet a fine-grained "when do I usually interrupt" analysis
 - 2.0.0 is a **breaking** release: technical naming is unified under `sisy-*`, **no automatic 1.x data migration is provided** — manual migration steps are in [docs/data.md](docs/data.md#7-从-1x-手工迁移)
 

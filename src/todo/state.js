@@ -107,6 +107,31 @@
 
     function isToday() { return state.viewDay === date.todayKey(); }
 
+    /** 顺延：昨天（及更早）未完成的普通任务搬进今天，保留 rolledFrom 来源日。
+     *  每日任务（带 dailyId）不顺延——它们每天自动重新实体化，顺延会造成重复。 */
+    function rolloverOpenTasks() {
+      var today = date.todayKey();
+      var moved = false;
+      Object.keys(state.days).sort().forEach(function (k) {
+        if (k >= today) return;
+        var dd = state.days[k];
+        if (!dd || !Array.isArray(dd.tasks) || !dd.tasks.length) return;
+        var keep = [], go = [];
+        dd.tasks.forEach(function (t) {
+          if (t && !t.done && !t.dailyId) {
+            if (!t.rolledFrom) t.rolledFrom = k;
+            go.push(t); moved = true;
+          } else keep.push(t);
+        });
+        if (go.length) {
+          dd.tasks = keep;
+          day(today).tasks = go.concat(day(today).tasks);   // 顺延任务置顶：先还昨天的债
+        }
+      });
+      if (moved) persist();
+      return moved;
+    }
+
     /* ---------------- 变更 ---------------- */
     var api = {
       STATE_KEY: STATE_KEY,
@@ -114,6 +139,7 @@
 
       init: function () {
         load();
+        rolloverOpenTasks();
         syncDaily();
         return api;
       },
@@ -139,6 +165,7 @@
 
       persist: persist,
       syncDaily: syncDaily,
+      rolloverOpenTasks: rolloverOpenTasks,
       findTask: findTask,
       findSub: findSub,
 
@@ -278,10 +305,11 @@
         return true;
       },
 
-      /** 跨天：生成新一天每日任务；若正看着「今天」则跟随 */
+      /** 跨天：生成新一天每日任务；顺延昨天未完成任务；若正看着「今天」则跟随 */
       handleDayRollover: function (prevDay) {
         var today = date.todayKey();
         if (today === prevDay) return false;
+        rolloverOpenTasks();
         syncDaily();
         if (state.viewDay === prevDay) state.viewDay = today;
         persist();

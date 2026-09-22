@@ -156,18 +156,24 @@ app.whenReady().then(async () => {
     await todo("document.activeElement.value='补充一个步骤';document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));document.getElementById('filterBtn').click();document.querySelector('[data-id=\"b\"] [data-act=\"toggle\"]').click()");
     await todo(`(() => {const row=document.querySelector('[data-id="a"]');row.querySelector('button[data-act="edit"]').click();const input=row.querySelector('input');input.value='一条很长的任务名称，用来检查小窗里的标题换行与计时按钮布局'.repeat(4);input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));document.querySelector('[data-id="a"] [data-act="focus"]').click();})()`);
     await wait(500);
-    await verify('task focus action starts authoritative timer',timer,"DSH.timer.state.snapshot().timer.running && DSH.timer.state.snapshot().timer.task.id==='a'");
+    await verify('task focus action binds task and awaits plan', timer, "(() => { const t = DSH.timer.state.snapshot().timer; return !t.running && t.awaitPlan === true && !!t.task && t.task.id === 'a'; })()");
+    await verify('plan picker opens in compact window', timer, "!document.getElementById('setupPanel').hidden");
+    await timer("DSH.timer.state.cmd('applyPlan', {plan:'classic'})"); await wait(200);
+    await verify('plan selection keeps bound task', timer, "(() => { const t = DSH.timer.state.snapshot().timer; return !!t.task && t.task.id === 'a' && !!t.plan && t.plan.key === 'classic'; })()");
+    await timer("DSH.timer.state.cmd('start')"); await wait(200);
+    const boundStarted = await waitTrue("DSH.timer.state.snapshot().timer.running", 1500);
+    check('task focus action starts authoritative timer', boundStarted === true, boundStarted);
     await verify('shell displays bound task title',main,"document.getElementById('shellTask').textContent.includes('一条很长的任务名称')");
     await verify('active row visually distinguished',todo,"document.querySelector('[data-id=\"a\"]').classList.contains('current-task')");
     await verify('trusted renderer cannot switch an ongoing task',todo,`(async()=>{const result=await dshTimer.startTask({id:'b',day:${JSON.stringify(today)}});return result.ok===false&&result.code==='timer-busy';})()`);
     tw.setContentSize(230,300);await wait(200);
-    await verify('bound long title leaves time and buttons unobstructed at 230x300',timer,`(() => {
-      // 只断言当前 markup 里真实存在的元素：id 写错时要显式失败，而不是抛 TypeError
-      const ids=['activeTaskName','timeText','startBtn','resetBtn','stateChip'];
+    await verify('long bound title leaves controls unobstructed at 230x300',timer,`(() => {
+      // 小窗不再展示任务名（e34d742 起）：只断言计时控件在最小尺寸内互不遮挡
+      const ids=['timeText','startBtn','resetBtn','stateChip'];
       const box=id=>{const el=document.getElementById(id);return el?el.getBoundingClientRect():null;};
       const insideViewport=ids.every(id=>{const r=box(id);return !!r&&r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;});
       if(!insideViewport) return false;
-      return box('activeTaskName').bottom<=box('timeText').top&&box('timeText').bottom<=document.querySelector('.dock').getBoundingClientRect().top;
+      return box('timeText').bottom<=document.querySelector('.dock').getBoundingClientRect().top;
     })()`);
     await shot(tw,'15-bound-minimum-timer');
     await shot(win,'16-bound-task-list');

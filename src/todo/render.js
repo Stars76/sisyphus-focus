@@ -46,7 +46,9 @@
       dailyAddBtn: $('dailyAddBtn'),
       dailyInput: $('dailyInput'),
       dataList: $('dataList'),
-      dataInfo: $('dataInfo')
+      dataInfo: $('dataInfo'),
+      dayView: $('dayView'), rangeView: $('rangeView'),
+      timeline: $('timeline'), tlDay: $('tlDay')
     };
 
     var calMonth = new Date();
@@ -55,6 +57,70 @@
     var activeTask = null, taskTotals = Object.create(null);
     function viewKey(id) { return state.viewDay + '/' + id; }
     function saveView() { NS.store.set('sisy-todo-view', { onlyOpen: onlyOpen, collapsed: Array.from(collapsed).slice(-1000) }); }
+
+    /* ---------------- 每日时间轴（重叠块并排分列，日历事件式布局） ---------------- */
+    function renderTimeline(blocks) {
+      var wrap = el.timeline;
+      if (!wrap) return;
+      wrap.replaceChildren();
+      if (!blocks || !blocks.length) {
+        var empty = document.createElement('p');
+        empty.className = 'tl-empty';
+        empty.textContent = '这一天还没有专注时段。开始一次任务专注，或点「补录时段」手动添加。';
+        wrap.appendChild(empty);
+        return;
+      }
+      var laid = NS.statistics.layoutTimeline(blocks);
+      var axis = document.createElement('div');
+      axis.className = 'tl-axis'; axis.setAttribute('aria-hidden', 'true');
+      for (var h = 0; h <= 21; h += 3) {
+        var tick = document.createElement('span');
+        tick.className = 'tl-tick';
+        tick.style.top = (h / 24 * 100) + '%';
+        tick.textContent = (h < 10 ? '0' : '') + h + ':00';
+        axis.appendChild(tick);
+      }
+      wrap.appendChild(axis);
+      var track = document.createElement('div');
+      track.className = 'tl-track';
+      laid.forEach(function (b) {
+        var blk = document.createElement('div');
+        blk.className = 'tl-block' + (b.result === 'abandoned' ? ' warn' : '') + (b.result === 'manual' ? ' manual' : '');
+        blk.setAttribute('role', 'listitem');
+        blk.dataset.key = b.key;
+        blk.dataset.start = NS.statistics.toHhmm(b.startMin);
+        blk.dataset.end = NS.statistics.toHhmm(b.endMin);
+        if (b.taskId) blk.dataset.taskId = b.taskId;
+        if (b.taskDay) blk.dataset.taskDay = b.taskDay;
+        if (b.result === 'manual' && b.id) blk.dataset.mid = b.id;
+        blk.style.top = (b.startMin / 1440 * 100) + '%';
+        blk.style.height = Math.max((b.endMin - b.startMin) / 1440 * 100, 2.4) + '%';
+        blk.style.left = 'calc(' + (b.col * 100 / b.cols) + '% + 2px)';
+        blk.style.width = 'calc(' + (100 / b.cols) + '% - 4px)';
+        var range = NS.statistics.toHhmm(b.startMin) + '–' + NS.statistics.toHhmm(b.endMin);
+        var time = document.createElement('div');
+        time.className = 'tl-time';
+        time.textContent = range + ' · ' + b.minutes + ' 分钟'
+          + (b.result === 'abandoned' ? ' · 中断' : '') + (b.edited ? ' · 已修正' : '');
+        var title = document.createElement('div');
+        title.className = 'tl-title';
+        title.textContent = b.title;
+        var acts = document.createElement('div');
+        acts.className = 'tl-acts';
+        [['edit', '改时间'], ['hide', '隐藏']].concat(
+          b.result === 'manual' ? [['del', '删除']] : [],
+          b.taskId ? [['task', '任务记录']] : []
+        ).forEach(function (a) {
+          var btn = document.createElement('button');
+          btn.type = 'button'; btn.dataset.tlact = a[0]; btn.textContent = a[1];
+          acts.appendChild(btn);
+        });
+        blk.append(time, title, acts);
+        blk.title = range + ' · ' + b.title;
+        track.appendChild(blk);
+      });
+      wrap.appendChild(track);
+    }
     calMonth.setDate(1);
     calMonth.setHours(0, 0, 0, 0);
 
@@ -143,7 +209,7 @@
         var badges = document.createElement('span');
         badges.className = 'task-badges';
         var subs = task.subtasks || [];
-        var total = taskTotals[viewKey(task.id)] || 0;
+        var total = taskTotals[task.id] || taskTotals[viewKey(task.id)] || 0;
         if (total) {
           var cr = document.createElement('span');
           cr.className = 'task-credit';
@@ -179,6 +245,13 @@
           at.textContent = task.alarm;
           alarm.appendChild(at);
           badges.appendChild(alarm);
+        }
+        if (task.rolledFrom) {
+          var rolled = document.createElement('span');
+          rolled.className = 'task-rolled';
+          rolled.textContent = '顺延';
+          rolled.title = '来自 ' + task.rolledFrom + '：未完成自动顺延到今天';
+          badges.appendChild(rolled);
         }
         if (badges.childNodes.length) titleRow.appendChild(badges);
 
@@ -484,7 +557,8 @@
       toggleCollapse: function (id) { var key = viewKey(id); if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key); saveView(); },
       expandSteps: function (id) { collapsed.delete(viewKey(id)); saveView(); },
       setActiveTask: function (task) { activeTask = task; },
-      setTaskTotals: function (totals) { taskTotals = totals; }
+      setTaskTotals: function (totals) { taskTotals = totals; },
+      renderTimeline: renderTimeline
     };
   }
 

@@ -21,6 +21,13 @@
 
 存储键清单见 `src/main/schema.js` 的 `KEYS`；未知 `sisy-*` 键向前兼容、原样搬运。
 
+> 未发布版本的数据模型新增（口径见 [CHANGELOG.md](../CHANGELOG.md) 顶部「未发布」节）：
+> 任务可选 `alarm: "HH:MM"`（非法值校验时丢弃并记入修复清单）、`rolledFrom`（顺延来源日，非法丢弃）；
+> `sisy-timer-state` 新增可选 `plan`（多轮计划队列 `{key,name,steps:[{phase,sec}],index}`，结构非法整体剥离）与 `awaitPlan`（等待选计划标记）；
+> 新键 `sisy-timeline-overrides`（`{edits, manual}` 时间轴修正层：改起止 / 隐藏 / 补录块，坏条目丢弃可修复）与
+> `sisy-export-template`（`{templates: {daily|task|weekly: {name, text}}}` 笔记模板，每份 ≤32KB 截断，缺省回落内置默认）。
+> 子步骤的 `minutes` 字段仍被校验保留（钳制 1–180，默认 5），界面不再展示。
+
 ## 2. 版本化迁移
 
 `src/main/migrations.js` 声明迁移链（幂等，可重复执行）：
@@ -60,11 +67,11 @@
 
 | 分区名 | 清掉的存储键 | 影响 | 不影响 |
 |---|---|---|---|
-| `tasks` | `sisy-focus-state-v2`、`sisy-focus-state` | 所有日期的今日事任务、小步骤、`dismissedDaily` | 每日模板、统计、历史、偏好 |
+| `tasks` | `sisy-focus-state-v2`、`sisy-focus-state`、`sisy-timeline-overrides` | 所有日期的今日事任务、小步骤、`dismissedDaily`、时间轴修正 | 每日模板、统计、历史、偏好 |
 | `daily` | `sisy-daily-config` | 每日任务模板（已实体化的任务保留） | 各日任务列表 |
 | `stats` | `sisy-timer-stats` | 今日轮数 / 分钟数（重新开始计数） | 历史记录、当前计时 |
 | `history` | `sisy-timer-history` | 中断与完成明细 | 统计、当前计时 |
-| `prefs` | `sisy-timer-prefs` | 时长 / 声音 / 通知 / 托盘等设置回默认 | 任务、统计 |
+| `prefs` | `sisy-timer-prefs`、`sisy-todo-view`、`sisy-export-template` | 时长 / 声音 / 通知 / 托盘等设置与笔记模板回默认 | 任务、统计 |
 | `timerState` | `sisy-timer-state`、`sisy-timer-run` | 正在进行的本轮计时 | 统计、历史 |
 | `all` | 以上全部 | 回到新装状态 | 备份与日志 |
 

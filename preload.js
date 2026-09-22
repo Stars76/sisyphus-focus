@@ -48,7 +48,10 @@ contextBridge.exposeInMainWorld('dshData', {
   pickImportFile: () => ipcRenderer.invoke('data:pick-import-file'),
   applyImport: (bundle, mode) => ipcRenderer.invoke('data:apply-import', bundle, mode),
   clearAll: (keys) => ipcRenderer.invoke('data:clear-all', keys),
-  reveal: (p) => ipcRenderer.invoke('data:reveal', p)
+  reveal: (p) => ipcRenderer.invoke('data:reveal', p),
+  renderNote: (kind, payload) => ipcRenderer.invoke('data:render-note', kind, payload),
+  copyNote: (kind, payload) => ipcRenderer.invoke('data:copy-note', kind, payload),
+  saveNote: (kind, payload) => ipcRenderer.invoke('data:save-note', kind, payload)
 });
 
 /* ---------------- 日志 ---------------- */

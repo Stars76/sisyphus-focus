@@ -127,12 +127,12 @@
       if (el.taskName) { el.taskName.hidden = true; txt(el.taskName, ''); }
       flow && flow.setPaused && flow.setPaused(!!t.paused);
 
-      /* 状态徽章：进行中/暂停时带剩余时间，空闲仅『待机中』 */
+      /* 状态徽章：带本轮设定时长（固定不变），剩余倒计时看中央大数字 */
       var st = chipState(t, snap);
       if (el.chip) el.chip.dataset.state = st.key;
       var stText = st.text;
       if (t.running || t.paused) {
-        stText = st.text + ' · ' + mmss(remain, false);
+        stText = st.text + ' · ' + date.fmtClock(Math.max(0, Math.round(t.totalSec)));
       }
       txt(el.stateText, stText);
 

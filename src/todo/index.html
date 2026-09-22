@@ -69,6 +69,20 @@
 
       <div class="settings-sep"></div>
 
+      <div class="settings-section">笔记模板（Obsidian / Notion）</div>
+      <div class="settings-desc">用 {{变量}} 生成 Markdown 笔记：复制后直接粘贴进 Obsidian / Notion，或存为 .md 文件。</div>
+      <div class="stats-tabs" role="group" aria-label="选择模板"><button type="button" data-tpl="daily" aria-pressed="true">每日复盘</button><button type="button" data-tpl="task" aria-pressed="false">单任务</button><button type="button" data-tpl="weekly" aria-pressed="false">周报</button></div>
+      <textarea id="tplText" class="tpl-text" rows="9" spellcheck="false" aria-label="模板内容"></textarea>
+      <div class="settings-desc" id="tplVars" role="status"></div>
+      <div class="add-row">
+        <button type="button" id="tplSave">保存模板</button>
+        <button type="button" id="tplReset">恢复默认</button>
+        <button type="button" id="tplPreview">预览</button>
+      </div>
+      <pre class="tpl-preview" id="tplPreviewOut" hidden></pre>
+
+      <div class="settings-sep"></div>
+
       <div class="settings-section">数据备份</div>
       <div class="settings-desc">数据保存在这台电脑上。换电脑或清理数据前，先导出一份备份。</div>
       <ul class="settings-list" id="dataList"></ul>
@@ -78,9 +92,34 @@
 
   <div class="stats-panel" id="statsPanel" aria-labelledby="statsTitle" hidden>
     <div class="settings-head"><button class="icon-btn" id="statsBack" title="返回"><sisy-icon name="LeftIcon"></sisy-icon></button><span class="settings-title" id="statsTitle">专注统计</span><span style="width:28px"></span></div>
-    <div class="stats-tabs" role="group" aria-label="统计范围"><button type="button" data-range="week" aria-pressed="true">本周</button><button type="button" data-range="month" aria-pressed="false">本月</button></div>
-    <div class="stats-grid"><div><b id="statMinutes">0</b><span>专注分钟</span></div><div><b id="statRounds">0</b><span>完成轮次</span></div><div><b id="statTasks">0</b><span>完成任务</span></div><div><b id="statStreak">0</b><span>连续天数</span></div></div>
-    <div class="stats-section">专注时段</div><div class="hours" id="statHours" role="list" aria-label="按开始时间分组的专注分钟"></div><p class="settings-desc" id="statsNote" role="status"></p>
+    <div class="stats-tabs" role="group" aria-label="统计范围"><button type="button" data-range="day" aria-pressed="false">每日</button><button type="button" data-range="week" aria-pressed="true">本周</button><button type="button" data-range="month" aria-pressed="false">本月</button></div>
+    <div id="dayView" hidden>
+      <div class="tl-nav">
+        <button class="icon-btn" id="tlPrev" type="button" title="前一天" aria-label="前一天"><sisy-icon name="LeftIcon"></sisy-icon></button>
+        <span id="tlDay" role="status"></span>
+        <button class="icon-btn" id="tlNext" type="button" title="后一天" aria-label="后一天"><sisy-icon name="RightIcon"></sisy-icon></button>
+        <button class="list-filter" id="tlTodayBtn" type="button">今天</button>
+      </div>
+      <div class="timeline" id="timeline" role="list" aria-label="每日时间轴"></div>
+      <form class="tl-form" id="tlForm" hidden>
+        <input id="tlTitle" aria-label="时段名称" placeholder="做了什么（补录必填）" autocomplete="off">
+        <input id="tlStart" type="time" aria-label="开始时间" required>
+        <input id="tlEnd" type="time" aria-label="结束时间" required>
+        <button class="btn-ghost" id="tlSave" type="submit">保存</button>
+        <button class="btn-ghost" id="tlCancel" type="button">取消</button>
+      </form>
+      <div class="tl-actions">
+        <button class="list-filter" id="tlAdd" type="button">+ 补录时段</button>
+        <button class="list-filter" id="noteDailyCopy" type="button">复制今日复盘</button>
+        <button class="list-filter" id="noteDailySave" type="button">存为 .md</button>
+        <button class="list-filter" id="noteWeeklyCopy" type="button">复制周报</button>
+      </div>
+    </div>
+    <div id="rangeView">
+      <div class="stats-grid"><div><b id="statMinutes">0</b><span>专注分钟</span></div><div><b id="statRounds">0</b><span>完成轮次</span></div><div><b id="statTasks">0</b><span>完成任务</span></div><div><b id="statStreak">0</b><span>连续天数</span></div></div>
+      <div class="stats-section">专注时段</div><div class="hours" id="statHours" role="list" aria-label="按开始时间分组的专注分钟"></div>
+    </div>
+    <p class="settings-desc" id="statsNote" role="status"></p>
   </div>
 </div>
 
@@ -91,6 +130,7 @@
 <script src="../shared/icons.js"></script>
 <script src="../shared/dialog.js"></script>
 <script src="../shared/statistics.js"></script>
+<script src="../shared/template.js"></script>
 <script src="state.js"></script>
 <script src="render.js"></script>
 <script src="app.js"></script>

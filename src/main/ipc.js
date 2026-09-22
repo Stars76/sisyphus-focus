@@ -38,6 +38,9 @@ function createIpc(deps) {
   const electron = deps.electron || require('electron');
   const { ipcMain, dialog, shell, app, Notification } = electron;
   const fs = deps.fs || require('fs');
+  const util = require('./util');
+  const stat = require('../shared/statistics');
+  const tplEngine = require('../shared/template');
 
   const OK = { ok: true };
   function fail(reason, detail) {
@@ -163,7 +166,142 @@ function createIpc(deps) {
 
     /* ---------------- 专注钟 ---------------- */
 
-    /* ---------------- 数据导出 / 导入（文件对话框，用户明确选择的路径） ---------------- */
+    /* ---------------- 笔记模板渲染 / 复制 / 导出（Obsidian / Notion 联动） ---------------- */
+  const NOTE_KINDS = ['daily', 'task', 'weekly'];
+
+  function slugTitle(s) {
+    return String(s || '').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 24);
+  }
+
+  /** 组装模板渲染数据（当天任务 / 时间轴 / 统计），返回渲染好的 Markdown */
+  function buildNote(kind, payload) {
+    if (NOTE_KINDS.indexOf(kind) === -1) return fail('未知笔记类型');
+    const st = store.get(schema.KEYS.STATE_V2, null);
+    const days = (st && st.days) || {};
+    const history = store.get(schema.KEYS.TIMER_HISTORY, []) || [];
+    const overrides = store.get(schema.KEYS.TIMELINE_OVERRIDES, null);
+    const stored = store.get(schema.KEYS.EXPORT_TEMPLATE, null);
+    const totals = stat.taskTotals(history);
+    const tpl = tplEngine.pick(stored, kind);
+    const vars = {}, lists = {};
+    const toRows = (blocks) => blocks.map(function (b) {
+      return { start: stat.toHhmm(b.startMin), end: stat.toHhmm(b.endMin), title: b.title, minutes: b.minutes };
+    });
+    let fileName = '';
+
+    if (kind === 'daily') {
+      const dayKey = (payload && payload.day != null && util.normalizeKey(payload.day)) || util.todayKey();
+      const blocks = stat.dayTimeline(history, dayKey, overrides);
+      const dayTasks = (days[dayKey] && Array.isArray(days[dayKey].tasks)) ? days[dayKey].tasks : [];
+      const done = dayTasks.filter(function (t) { return t && t.done; });
+      vars.date = dayKey;
+      vars.date_cn = util.dayLabel(dayKey);
+      vars.weekday = util.weekdayLabel(dayKey);
+      vars.focus_minutes = blocks.reduce(function (a, b) { return a + b.minutes; }, 0);
+      vars.focus_rounds = blocks.reduce(function (a, b) { return a + b.segments; }, 0);
+      vars.tasks_done_count = done.length;
+      vars.tasks_total_count = dayTasks.length;
+      lists.timeline = toRows(blocks);
+      lists.tasks_done = done.map(function (t) { return { title: t.title || '（未命名任务）', minutes: totals[t.id] || 0 }; });
+      fileName = '每日复盘-' + dayKey + '.md';
+    } else if (kind === 'task') {
+      if (!payload || !isStr(payload.taskId, 128) || typeof payload.taskDay !== 'string') return fail('缺少任务标识');
+      const dayKey = util.normalizeKey(payload.taskDay);
+      if (!dayKey) return fail('任务日期非法');
+      let title = null;
+      const list = (days[dayKey] && Array.isArray(days[dayKey].tasks)) ? days[dayKey].tasks : [];
+      list.forEach(function (t) { if (t && t.id === payload.taskId) title = t.title; });
+      if (title == null) history.forEach(function (h) { if (h && h.taskId === payload.taskId && typeof h.taskTitle === 'string') title = h.taskTitle; });
+      if (title == null) return fail('任务不存在');
+      const blocks = stat.dayTimeline(history, dayKey, overrides).filter(function (b) { return b.taskId === payload.taskId; });
+      vars.task_title = title || '（未命名任务）';
+      vars.task_id = payload.taskId;
+      vars.date = dayKey;
+      vars.date_cn = util.dayLabel(dayKey);
+      vars.task_minutes = totals[payload.taskId] || 0;
+      vars.focus_minutes = blocks.reduce(function (a, b) { return a + b.minutes; }, 0);
+      vars.focus_rounds = blocks.reduce(function (a, b) { return a + b.segments; }, 0);
+      lists.timeline = toRows(blocks);
+      fileName = '任务-' + (slugTitle(title) || payload.taskId.slice(0, 8)) + '-' + dayKey + '.md';
+    } else {
+      const s = stat.summary(history, days, 'week');
+      const done = [];
+      Object.keys(days).sort().forEach(function (k) {
+        if (k < s.since || k > s.until) return;
+        (((days[k] || {}).tasks) || []).forEach(function (t) {
+          if (t && t.done) done.push({ title: t.title || '（未命名任务）', minutes: totals[t.id] || 0 });
+        });
+      });
+      vars.week_since = s.since;
+      vars.week_until = s.until;
+      vars.date = s.until;
+      vars.date_cn = util.dayLabel(s.until);
+      vars.focus_minutes = s.minutes;
+      vars.focus_rounds = s.rounds;
+      vars.tasks_done_count = s.tasks;
+      vars.streak = s.streak;
+      vars.peak_range = s.peakIndex < 0 ? '暂无' : (s.peakIndex * 2 + '–' + (s.peakIndex * 2 + 2) + ' 点');
+      lists.tasks_done = done;
+      fileName = '周报-' + s.since + '.md';
+    }
+    return { ok: true, text: tplEngine.render(tplTextOf(tpl, payload), { vars: vars, lists: lists }), name: tpl.name, fileName: fileName };
+  }
+
+  /** 预览可携带 templateText（编辑框当前内容）即时渲染；正式导出走已保存的模板 */
+  function tplTextOf(tpl, payload) {
+    if (payload && typeof payload.templateText === 'string' && payload.templateText.length <= 32 * 1024) return payload.templateText;
+    return tpl.text;
+  }
+
+  function checkNotePayload(payload) {
+    if (payload !== undefined && payload !== null && (typeof payload !== 'object' || Array.isArray(payload))) return '负载格式非法';
+    return null;
+  }
+
+  /* ---------------- 数据导出 / 导入（文件对话框，用户明确选择的路径） ---------------- */
+    ipcMain.handle('data:render-note', (e, kind, payload) => {
+      const bad = checkNotePayload(payload);
+      if (bad) return fail(bad);
+      return buildNote(kind, payload);
+    });
+    ipcMain.handle('data:copy-note', (e, kind, payload) => {
+      const bad = checkNotePayload(payload);
+      if (bad) return fail(bad);
+      const r = buildNote(kind, payload);
+      if (!r.ok) return r;
+      try {
+        if (!electron.clipboard || typeof electron.clipboard.writeText !== 'function') return fail('剪贴板不可用');
+        electron.clipboard.writeText(r.text);
+        log('笔记已复制到剪贴板', kind);
+        return { ok: true, name: r.name };
+      } catch (err) {
+        log('写入剪贴板失败', err);
+        return fail('剪贴板写入失败');
+      }
+    });
+    ipcMain.handle('data:save-note', async (e, kind, payload) => {
+      const bad = checkNotePayload(payload);
+      if (bad) return fail(bad);
+      const r = buildNote(kind, payload);
+      if (!r.ok) return r;
+      const win = getWin();
+      const res = await dialog.showSaveDialog(win || undefined, {
+        title: '导出笔记（Markdown）',
+        defaultPath: path.join(app.getPath('documents'), r.fileName),
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+      if (res.canceled || !res.filePath) return { ok: false, canceled: true };
+      try {
+        fs.writeFileSync(res.filePath, r.text, 'utf8');
+        try { authorizedExportPaths.add(path.resolve(res.filePath)); } catch (ee) { }
+        log('已导出笔记到 ' + res.filePath);
+        return { ok: true, path: res.filePath, name: r.name };
+      } catch (err) {
+        log('笔记导出失败', err);
+        return fail((err && err.message) || '笔记导出失败');
+      }
+    });
+
     ipcMain.handle('data:export-file', async () => {
       const bundle = store.exportAll();
       const d = new Date();

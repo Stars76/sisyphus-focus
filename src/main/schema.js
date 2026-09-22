@@ -41,16 +41,18 @@ const K = {
   TIMER_STATS: 'sisy-timer-stats',
   TIMER_PREFS: 'sisy-timer-prefs',
   TIMER_HISTORY: 'sisy-timer-history',
-  TODO_VIEW: 'sisy-todo-view'
+  TODO_VIEW: 'sisy-todo-view',
+  TIMELINE_OVERRIDES: 'sisy-timeline-overrides',
+  EXPORT_TEMPLATE: 'sisy-export-template'
 };
 
 /* 「清空数据」分区 → 存储键映射（文档 docs/data.md 有各自的影响说明） */
 const CLEAR_SCOPES = {
-  tasks: [K.STATE_V2, K.STATE_V1],                 // 今日事任务（含历史各日）
+  tasks: [K.STATE_V2, K.STATE_V1, K.TIMELINE_OVERRIDES], // 今日事任务（含历史各日）+ 时间轴修正
   daily: [K.DAILY],                                // 每日任务模板
   stats: [K.TIMER_STATS],                          // 专注统计（轮次/分钟）
   history: [K.TIMER_HISTORY],                      // 专注历史明细
-  prefs: [K.TIMER_PREFS, K.TODO_VIEW],              // 计时与任务视图偏好
+  prefs: [K.TIMER_PREFS, K.TODO_VIEW, K.EXPORT_TEMPLATE], // 计时与任务视图偏好 + 笔记模板
   timerState: [K.TIMER_STATE, K.TIMER_RUN]         // 正在进行的计时（不重置统计）
 };
 
@@ -106,6 +108,12 @@ function checkTask(t, label, ctx) {
   if (t.alarm != null) {
     if (typeof t.alarm === 'string' && ALARM_RE.test(t.alarm)) out.alarm = t.alarm;
     else ctx.repaired.push(label + '：alarm 非 HH:MM，已丢弃');
+  }
+  // 顺延来源日：普通任务未完成跨天顺迁后保留原日期（合法日期键，非法丢弃）
+  if (t.rolledFrom != null) {
+    const rf = util.normalizeKey(t.rolledFrom);
+    if (rf) out.rolledFrom = rf;
+    else ctx.repaired.push(label + '：rolledFrom 非法，已丢弃');
   }
   if (!out.title && !out.subtasks.length) {
     ctx.errors.push(label + '：任务既无标题也无小步骤');
@@ -338,6 +346,66 @@ function validateTimerHistory(value, ctx) {
   return out;
 }
 
+/** 时间轴修正层：edits 按块指纹修正派生块（改起止/隐藏），manual 是手动补录块；非法条目丢弃可修复 */
+function validateTimelineOverrides(value, ctx) {
+  const label = K.TIMELINE_OVERRIDES;
+  if (!isPlainObject(value)) { ctx.errors.push(label + '：必须是对象'); return null; }
+  const out = { edits: [], manual: [] };
+  (Array.isArray(value.edits) ? value.edits : []).forEach(function (e, i) {
+    const el = label + '.edits[' + i + ']';
+    if (!isPlainObject(e) || typeof e.key !== 'string' || !e.key || e.key.length > 200) { ctx.repaired.push(el + '：非法，已丢弃'); return; }
+    const o = { key: e.key.slice(0, 200) };
+    if (e.start != null) {
+      if (typeof e.start === 'string' && ALARM_RE.test(e.start)) o.start = e.start;
+      else ctx.repaired.push(el + '：start 非 HH:MM，已丢弃');
+    }
+    if (e.end != null) {
+      if (typeof e.end === 'string' && ALARM_RE.test(e.end)) o.end = e.end;
+      else ctx.repaired.push(el + '：end 非 HH:MM，已丢弃');
+    }
+    if (e.hidden != null) o.hidden = !!e.hidden;
+    // 整条没有任何有效修改（字段全被丢弃）→ 丢弃整条，避免 edits 膨胀出空壳
+    if (o.start == null && o.end == null && o.hidden == null) { ctx.repaired.push(el + '：无有效修改，已丢弃'); return; }
+    out.edits.push(o);
+  });
+  (Array.isArray(value.manual) ? value.manual : []).forEach(function (m, i) {
+    const ml = label + '.manual[' + i + ']';
+    if (!isPlainObject(m)) { ctx.repaired.push(ml + '：非法，已丢弃'); return; }
+    const day = util.normalizeKey(m.day);
+    if (!day || typeof m.start !== 'string' || !ALARM_RE.test(m.start) || typeof m.end !== 'string' || !ALARM_RE.test(m.end)) {
+      ctx.repaired.push(ml + '：字段缺失/非法，已丢弃'); return;
+    }
+    if (m.end <= m.start) { ctx.repaired.push(ml + '：结束不晚于开始，已丢弃'); return; }
+    out.manual.push({
+      id: (typeof m.id === 'string' && m.id) ? m.id.slice(0, 64) : 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+      day: day,
+      start: m.start,
+      end: m.end,
+      title: (typeof m.title === 'string') ? m.title.slice(0, 200) : ''
+    });
+  });
+  return out;
+}
+
+/** 笔记模板：{templates: {daily|task|weekly: {name, text}}}；缺省的种类回落内置默认，非法条目丢弃可修复 */
+function validateExportTemplate(value, ctx) {
+  const label = K.EXPORT_TEMPLATE;
+  if (!isPlainObject(value)) { ctx.errors.push(label + '：必须是对象'); return null; }
+  const out = { templates: {} };
+  const src = isPlainObject(value.templates) ? value.templates : {};
+  ['daily', 'task', 'weekly'].forEach(function (kind) {
+    const t = src[kind];
+    if (t == null) return;   // 缺省即用内置默认模板
+    if (!isPlainObject(t) || typeof t.text !== 'string') { ctx.repaired.push(label + '.' + kind + '：结构非法，已丢弃'); return; }
+    if (t.text.length > 32 * 1024) ctx.repaired.push(label + '.' + kind + '：超长，已截断');
+    out.templates[kind] = {
+      name: (typeof t.name === 'string' && t.name) ? t.name.slice(0, 60) : kind,
+      text: t.text.slice(0, 32 * 1024)
+    };
+  });
+  return out;
+}
+
 /** 按键名校验单个值。返回 {ok, value, repaired[]}；未知键按原值放行 */
 function validateValue(key, value) {
   const ctx = { errors: [], repaired: [] };
@@ -354,6 +422,8 @@ function validateValue(key, value) {
     case K.TIMER_PREFS: out = validateTimerPrefs(value, ctx); break;
     case K.TIMER_STATE: out = validateTimerState(value, ctx); break;
     case K.TIMER_HISTORY: out = validateTimerHistory(value, ctx); break;
+    case K.TIMELINE_OVERRIDES: out = validateTimelineOverrides(value, ctx); break;
+    case K.EXPORT_TEMPLATE: out = validateExportTemplate(value, ctx); break;
     case K.TIMER_RUN:
       if (!isPlainObject(value)) ctx.errors.push(K.TIMER_RUN + '：必须是对象');
       break;

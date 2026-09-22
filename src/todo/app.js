@@ -164,8 +164,10 @@
         refresh();
       } else if (act === 'focus') {
         if (global.dshTimer && global.dshTimer.startTask) {
-          // 绑定任务但不直接开跑：打开专注钟的计划选择器，让用户先选好时长/轮次
-          global.dshTimer.startTask({ id: ctx.task.id, day: state.viewDay }, { noStart: true }).then(function (result) {
+          // 已绑定到本轮的任务 → 直接恢复计时（「继续本轮专注」）；否则先绑定并弹计划选择器
+          var bound = lastFullSnap && lastFullSnap.timer && lastFullSnap.timer.task;
+          var same = !!(bound && bound.id === ctx.task.id && bound.day === state.viewDay);
+          global.dshTimer.startTask({ id: ctx.task.id, day: state.viewDay }, same ? undefined : { noStart: true }).then(function (result) {
             if (!result.ok) { NS.toast.show(result.error || '无法开始专注', { type: 'warn' }); return; }
             if (global.dshWindow) global.dshWindow.openTimerCompact();
           }).catch(function () { NS.toast.show('专注钟暂时不可用，请稍后重试', { type: 'error' }); });
@@ -290,13 +292,16 @@
       state.syncDaily();
       refresh();
     });
-    var statsRange = 'week', statsRequest = 0;
+    var statsRange = 'week', statsRequest = 0, tlDayKey = date.todayKey();
     function readHistory() {
       return global.dshTimer && global.dshTimer.history ? global.dshTimer.history() : Promise.resolve(store.get('sisy-timer-history', []));
     }
     function renderStats() {
       var request = ++statsRequest;
       el.statsPanel.querySelectorAll('[data-range]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.range === statsRange)); });
+      if (el.dayView) el.dayView.hidden = statsRange !== 'day';
+      if (el.rangeView) el.rangeView.hidden = statsRange === 'day';
+      if (statsRange === 'day') { renderDayTimeline(); return; }
       el.statsNote.textContent = '正在读取记录…';
       readHistory().then(function (history) {
         if (request !== statsRequest) return;
@@ -323,6 +328,179 @@
     function refreshHistory() {
       readHistory().then(function (history) { render.setTaskTotals(NS.statistics.taskTotals(history)); refresh(); }).catch(function () { NS.toast.show('专注记录暂时无法读取，请稍后重试', { type: 'warn' }); });
     }
+
+    /* ---------------- 每日时间轴 ---------------- */
+    var $id = function (id) { return document.getElementById(id); };
+    var tlForm = $id('tlForm'), tlTitle = $id('tlTitle'), tlStart = $id('tlStart'), tlEnd = $id('tlEnd');
+    var editing = null;   // {mode:'edit'|'add', key?}
+
+    function loadOverrides() {
+      var o = store.get('sisy-timeline-overrides', null);
+      return (o && typeof o === 'object')
+        ? { edits: Array.isArray(o.edits) ? o.edits : [], manual: Array.isArray(o.manual) ? o.manual : [] }
+        : { edits: [], manual: [] };
+    }
+    function saveOverrides(o) {
+      var r = store.set('sisy-timeline-overrides', o);
+      if (r && r.ok === false) NS.toast.show('时间轴修正保存失败', { type: 'error' });
+      return r;
+    }
+    function renderDayTimeline() {
+      var request = statsRequest;
+      if (el.tlDay) el.tlDay.textContent = date.fullLabel(tlDayKey) + (tlDayKey === date.todayKey() ? '（今天）' : '');
+      el.statsNote.textContent = '正在读取记录…';
+      readHistory().then(function (history) {
+        if (request !== statsRequest) return;
+        var blocks = NS.statistics.dayTimeline(history, tlDayKey, loadOverrides());
+        render.renderTimeline(blocks);
+        var mins = blocks.reduce(function (a, b) { return a + b.minutes; }, 0);
+        el.statsNote.textContent = '共 ' + blocks.length + ' 个时段 · ' + mins + ' 分钟。重叠时段并排显示；「改时间 / 隐藏」只修正显示，不动专注记录。';
+      }).catch(function () { if (request === statsRequest) el.statsNote.textContent = '读取记录失败，请关闭后重试。'; });
+    }
+    function openTlForm(mode, blk) {
+      editing = { mode: mode, key: blk ? blk.dataset.key : null };
+      tlForm.hidden = false;
+      tlTitle.disabled = (mode === 'edit');
+      tlTitle.value = mode === 'edit' ? ((blk && blk.querySelector('.tl-title') || {}).textContent || '') : '';
+      tlStart.value = (blk && blk.dataset.start) || '09:00';
+      tlEnd.value = (blk && blk.dataset.end) || '10:00';
+      (mode === 'add' ? tlTitle : tlStart).focus();
+    }
+    tlForm.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (!editing) return;
+      var s = tlStart.value, e = tlEnd.value;
+      if (!s || !e) return;
+      if (!(NS.statistics.toMin(e) > NS.statistics.toMin(s))) { NS.toast.show('结束时间要晚于开始时间', { type: 'warn' }); return; }
+      var ov = loadOverrides();
+      if (editing.mode === 'add') {
+        var title = (tlTitle.value || '').trim();
+        if (!title) { NS.toast.show('补录时段请填写名称', { type: 'warn' }); return; }
+        ov.manual.push({ id: 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), day: tlDayKey, start: s, end: e, title: title.slice(0, 200) });
+      } else {
+        var found = null;
+        ov.edits.forEach(function (x) { if (x.key === editing.key) found = x; });
+        if (!found) { found = { key: editing.key }; ov.edits.push(found); }
+        found.start = s; found.end = e;
+      }
+      saveOverrides(ov);
+      tlForm.hidden = true; editing = null;
+      renderDayTimeline();
+    });
+    $id('tlCancel').addEventListener('click', function () { tlForm.hidden = true; editing = null; });
+    $id('tlAdd').addEventListener('click', function () { openTlForm('add', null); });
+    $id('tlPrev').addEventListener('click', function () { tlDayKey = date.shiftDay(tlDayKey, -1); renderDayTimeline(); });
+    $id('tlNext').addEventListener('click', function () { tlDayKey = date.shiftDay(tlDayKey, 1); renderDayTimeline(); });
+    $id('tlTodayBtn').addEventListener('click', function () { tlDayKey = date.todayKey(); renderDayTimeline(); });
+    el.timeline.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-tlact]');
+      if (!btn) return;
+      var blk = btn.closest('.tl-block');
+      if (!blk) return;
+      var act = btn.dataset.tlact;
+      if (act === 'edit') { openTlForm('edit', blk); return; }
+      if (act === 'hide' || act === 'del') {
+        var ov = loadOverrides();
+        if (act === 'del') {
+          ov.manual = ov.manual.filter(function (m) { return m.id !== blk.dataset.mid; });
+        } else {
+          var found = null;
+          ov.edits.forEach(function (x) { if (x.key === blk.dataset.key) found = x; });
+          if (!found) { found = { key: blk.dataset.key }; ov.edits.push(found); }
+          found.hidden = true;
+        }
+        saveOverrides(ov);
+        renderDayTimeline();
+        return;
+      }
+      if (act === 'task') {
+        noteCall('copyNote', 'task', { taskId: blk.dataset.taskId, taskDay: blk.dataset.taskDay || tlDayKey });
+      }
+    });
+
+    /* ---------------- 笔记导出（Obsidian / Notion 联动） ---------------- */
+    function noteCall(fn, kind, payload) {
+      if (!global.dshData || !global.dshData[fn]) { NS.toast.show('当前是浏览器模式，笔记功能不可用', { type: 'warn' }); return Promise.resolve(null); }
+      return global.dshData[fn](kind, payload || {}).then(function (r) {
+        if (!r || !r.ok) {
+          if (r && r.canceled) return r;
+          NS.toast.show((r && r.error) || '操作失败', { type: 'error' });
+          return r;
+        }
+        if (fn === 'copyNote') NS.toast.show('已复制到剪贴板（' + (r.name || kind) + '）', { type: 'ok' });
+        else if (fn === 'saveNote') NS.toast.show('已保存 ' + r.path, {
+          type: 'ok', ms: 8000,
+          action: { label: '打开', onClick: function () { global.dshData.reveal(r.path); } }
+        });
+        return r;
+      }).catch(function (e) { log.error('笔记操作失败', e); NS.toast.show('笔记操作失败', { type: 'error' }); return null; });
+    }
+    $id('noteDailyCopy').addEventListener('click', function () { noteCall('copyNote', 'daily', { day: tlDayKey }); });
+    $id('noteDailySave').addEventListener('click', function () { noteCall('saveNote', 'daily', { day: tlDayKey }); });
+    $id('noteWeeklyCopy').addEventListener('click', function () { noteCall('copyNote', 'weekly', {}); });
+
+    /* ---------------- 笔记模板编辑 ---------------- */
+    var tplKind = 'daily';
+    var TPL_VARS = {
+      daily: '{{date}} {{date_cn}} {{weekday}} {{focus_minutes}} {{focus_rounds}} {{tasks_done_count}} {{tasks_total_count}}｜循环块 {{#timeline}}{{start}} {{end}} {{title}} {{minutes}}{{/timeline}}、{{#tasks_done}}{{title}} {{minutes}}{{/tasks_done}}',
+      task: '{{task_title}} {{task_id}} {{task_minutes}} {{date}} {{date_cn}} {{focus_minutes}} {{focus_rounds}}｜循环块 {{#timeline}}{{start}} {{end}} {{minutes}}{{/timeline}}',
+      weekly: '{{week_since}} {{week_until}} {{focus_minutes}} {{focus_rounds}} {{tasks_done_count}} {{streak}} {{peak_range}}｜循环块 {{#tasks_done}}{{title}} {{minutes}}{{/tasks_done}}'
+    };
+    var tplText = $id('tplText'), tplVars = $id('tplVars'), tplPreviewOut = $id('tplPreviewOut');
+    function loadTpl(kind) {
+      tplKind = kind;
+      document.querySelectorAll('[data-tpl]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tpl === kind)); });
+      var t = NS.template.pick(store.get('sisy-export-template', null), kind);
+      tplText.value = t.text;
+      tplVars.textContent = '变量：' + TPL_VARS[kind];
+      tplPreviewOut.hidden = true;
+    }
+    document.querySelectorAll('[data-tpl]').forEach(function (b) {
+      b.addEventListener('click', function () { loadTpl(b.dataset.tpl); });
+    });
+    $id('tplSave').addEventListener('click', function () {
+      var stored = store.get('sisy-export-template', null) || {};
+      var templates = Object.assign({}, stored.templates || {});
+      var def = NS.template.DEFAULT_TEMPLATES[tplKind] || {};
+      templates[tplKind] = { name: (templates[tplKind] && templates[tplKind].name) || def.name || tplKind, text: tplText.value };
+      var r = store.set('sisy-export-template', { templates: templates });
+      if (r && r.ok === false) NS.toast.show('模板保存失败：' + (r.error || ''), { type: 'error' });
+      else NS.toast.show('模板已保存', { type: 'ok' });
+    });
+    $id('tplReset').addEventListener('click', function () {
+      var stored = store.get('sisy-export-template', null) || {};
+      var templates = Object.assign({}, stored.templates || {});
+      delete templates[tplKind];
+      store.set('sisy-export-template', { templates: templates });
+      loadTpl(tplKind);
+      NS.toast.show('已恢复默认模板', { type: 'ok' });
+    });
+    $id('tplPreview').addEventListener('click', function () {
+      if (!global.dshData || !global.dshData.renderNote) { NS.toast.show('当前是浏览器模式，预览不可用', { type: 'warn' }); return; }
+      var payload = { templateText: tplText.value };
+      var ready = Promise.resolve(payload);
+      if (tplKind === 'task') {
+        ready = readHistory().then(function (history) {
+          var h = null;
+          (history || []).slice().reverse().forEach(function (x) { if (!h && x && x.taskId) h = x; });
+          if (!h) return null;
+          payload.taskId = h.taskId;
+          payload.taskDay = h.taskDay || tlDayKey;
+          return payload;
+        });
+      } else if (tplKind === 'daily') {
+        payload.day = tlDayKey;
+      }
+      ready.then(function (p) {
+        if (!p) { tplPreviewOut.hidden = false; tplPreviewOut.textContent = '还没有带任务的专注记录，先做一轮任务专注再预览。'; return; }
+        return global.dshData.renderNote(tplKind, p).then(function (r) {
+          tplPreviewOut.hidden = false;
+          tplPreviewOut.textContent = (r && r.ok) ? r.text : ((r && r.error) || '预览失败');
+        });
+      });
+    });
+    loadTpl('daily');
+
     el.statsBtn.addEventListener('click', function () { el.statsPanel.hidden = false; statsDialog.open(el.statsBack); renderStats(); });
     el.statsBack.addEventListener('click', function () { ++statsRequest; el.statsPanel.hidden = true; statsDialog.close(); });
     el.statsPanel.addEventListener('click', function (ev) { var b = ev.target.closest('[data-range]'); if (!b) return; statsRange = b.dataset.range; renderStats(); });

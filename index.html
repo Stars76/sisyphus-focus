@@ -102,16 +102,17 @@
     if(!snap) return;
     var t=snap.timer, p=snap.prefs;
     var state='idle', text='待机中';
+    // 状态条显示本轮设定时长（固定不变），剩余倒计时以专注钟中央大数字为准
     if(t.phase!=='focus'){
       state='break';
-      text=(t.phase==='short'?'短休息':'长休息')+' · '+fmt(t.leftSec);
-      if(!t.running && !t.idle) text='休息已暂停 · '+fmt(t.leftSec);
+      text=(t.phase==='short'?'短休息':'长休息')+' · '+fmt(t.totalSec);
+      if(!t.running && !t.idle) text='休息已暂停 · '+fmt(t.totalSec);
     } else if(t.running){
       state='running';
-      text=(t.recovered?'恢复中':'专注中')+' · '+fmt(t.leftSec);
+      text=(t.recovered?'恢复中':'专注中')+' · '+fmt(t.totalSec);
     } else if(t.paused){
       state='paused';
-      text='已暂停 · '+fmt(t.leftSec);
+      text='已暂停 · '+fmt(t.totalSec);
     }
     chip.dataset.state=state;
     chipText.textContent=text;
