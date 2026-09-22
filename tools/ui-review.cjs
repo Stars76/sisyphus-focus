@@ -54,7 +54,28 @@ app.whenReady().then(async () => {
     if (!frame) throw new Error('Todo frame missing');
     return frame.executeJavaScript(js);
   };
-  const shot = async (w, name) => { await wait(180); fs.writeFileSync(path.join(out, name + '.png'), (await w.webContents.capturePage()).toPNG()); };
+  // 抓两帧：第一帧唤醒合成器并丢弃（窗口刚 resize 后首次 capturePage 常返回旧帧）。
+  const shot = async (w, name) => {
+    w.webContents.invalidate();
+    await wait(120);
+    await w.webContents.capturePage();
+    await wait(260);
+    fs.writeFileSync(path.join(out, name + '.png'), (await w.webContents.capturePage()).toPNG());
+  };
+  // 主窗换尺寸后必须等渲染端真的换过视口再断言，否则会读到旧尺寸下的布局。
+  // Windows 偶发忽略一次 setContentSize，因此最多重试三轮并把结果写进日志。
+  const resizeMain = async (w, h) => {
+    let cur = 0;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try { win.show(); win.setContentSize(w, h); } catch (e) { console.log('resizeMain error: ' + (e && e.message)); }
+      for (let i = 0; i < 12; i++) {
+        cur = await todo('innerWidth');
+        if (Math.abs(cur - w) <= 3) { await wait(150); return; }
+        await wait(100);
+      }
+    }
+    console.log('resizeMain could not reach ' + w + ' (innerWidth=' + cur + ')');
+  };
   win.setContentSize(1060, 780);
   await shot(win, '01-tasks');
   await todo("document.getElementById('settingsBtn').click()");
@@ -96,6 +117,22 @@ app.whenReady().then(async () => {
     await verify('settings isolates underlying controls', todo, `(() => { document.getElementById('settingsBtn').focus(); document.getElementById('settingsBtn').click(); return document.getElementById('addForm').inert && document.activeElement.id==='backBtn'; })()`);
     await verify('Escape works inside settings input and restores focus', todo, `(() => { document.getElementById('dailyInput').focus(); document.getElementById('dailyInput').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); return !document.getElementById('settingsPanel').classList.contains('show') && !document.getElementById('addForm').inert && document.activeElement.id==='settingsBtn'; })()`);
     await verify('calendar keeps Tab within dialog', todo, `(() => { document.getElementById('calToggle').click(); document.getElementById('calClose').focus(); document.getElementById('calClose').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true})); return document.activeElement.id==='calPrev'; })()`);
+    // 月历必须随窗口放缩并整体居中：日格高度跟窗口高度走（≥ 7% 视口高、≥ 44px 可点），
+    // 卡片填满 ≥ 55% 视口且在水平/垂直方向居中（中心偏移 < 12% 视口高）。
+    await resizeMain(1060, 780);
+    await verify('calendar scales up and centers in the workspace', todo, `(() => {
+      const body=document.querySelector('.cal-body').getBoundingClientRect();
+      const days=[...document.querySelectorAll('.cal-day')];
+      if(!body.height||!days.length) return false;
+      const row=days[0].getBoundingClientRect().height;
+      const fillRatio=body.height/innerHeight;
+      const centerDelta=Math.abs(body.top+body.height/2-innerHeight/2);
+      const minRow=Math.min(44,innerHeight*0.078);   // 日格随视口高度放缩，矮窗按比例放宽
+      const ok = row>=minRow && fillRatio>=0.55 && centerDelta<=innerHeight*0.12 && days.length%7===0 && body.width<=innerWidth;
+      return ok ? true : {row,minRow,fillRatio,centerDelta,innerHeight,count:days.length};
+    })()`);
+    await shot(win,'03b-calendar-centered');
+    await resizeMain(720, 560);
     await verify('history empty state and return', todo, `(() => { document.getElementById('calClose').click(); document.getElementById('prevDay').click(); return document.querySelector('.todo-empty').textContent.includes('这一天没有记录') && document.getElementById('addForm').classList.contains('readonly'); })()`);
     await shot(win, '07-history-empty');
     await todo("document.getElementById('todayBtn').click()");
@@ -184,9 +221,49 @@ app.whenReady().then(async () => {
     await todo(`(() => {const end=new Date(),start=new Date(end.getTime()-25*60000);const d=${JSON.stringify(today)};dshStore.set('sisy-timer-history',[{id:'ui-recovered',day:d,phase:'focus',result:'recovered',plannedMinutes:25,actualMinutes:25,startedAt:start.toISOString(),finishedAt:end.toISOString(),pauseCount:0,pausedMinutes:0,taskId:'a',taskDay:d,taskTitle:'test'}]);document.getElementById('statsBtn').click();})()`);
     await wait(200);
     await verify('statistics include recovered rounds and twelve hour bins',todo,"document.getElementById('statMinutes').textContent==='25'&&document.getElementById('statHours').children.length===12&&Array.from(document.getElementById('statHours').children).some(n=>n.getAttribute('aria-label').includes('25 分钟'))");
+    // 范围视图在标准窗口下必须完整可见：不出现多余纵向滚动条（小窗允许滚动兜底）。
+    await resizeMain(1060,780);
+    await verify('range view fits without a stray scrollbar',todo,`(() => { const r=document.getElementById('rangeView'); const over=r.scrollHeight-r.clientHeight; return over<=1 ? true : {over,scrollHeight:r.scrollHeight,clientHeight:r.clientHeight}; })()`);
     await shot(win,'17-week-statistics');
+    // 每日时间轴：补录两条重叠时段，检查并排分列、每小时等高定位与滚动落点。
+    await todo(`(() => {
+      const d=${JSON.stringify(today)};
+      dshStore.set('sisy-timeline-overrides',{edits:[],manual:[
+        {id:'ui-m1',day:d,start:'09:00',end:'10:00',title:'整理本周计划，写下三件最要紧的事'},
+        {id:'ui-m2',day:d,start:'09:30',end:'11:20',title:'与上一段重叠：检查并排分列'}
+      ]});
+      document.querySelector('[data-range="day"]').click();
+    })()`);
+    await wait(250);
+    await verify('day timeline keeps merged and overlapping blocks readable', todo, `(() => {
+      const card=document.querySelector('.tl-card').getBoundingClientRect();
+      const wrap=document.getElementById('timeline');
+      const blocks=[...document.querySelectorAll('.tl-block')];
+      const widths=new Set(blocks.map(b=>b.style.width).filter(Boolean));
+      const hour=blocks.find(b=>b.dataset.start==='09:00'&&b.dataset.end==='10:00');
+      const hourH=hour?hour.getBoundingClientRect().height:0;
+      const scrollable=wrap.scrollHeight>wrap.clientHeight+1;
+      const scrolled=wrap.scrollTop>0;
+      const now=!!document.querySelector('.tl-now');
+      const ok = blocks.length>=3 && widths.size>=2 && wrap.getBoundingClientRect().height>=150 && hourH>=50 && scrollable && scrolled && now && card.height<=innerHeight && document.getElementById('tlDay').textContent.includes('（今天）');
+      return ok ? true : {blocks:blocks.length,cols:widths.size,hourH:Math.round(hourH),scrollable,scrolled,now,cardHeight:Math.round(card.height),innerHeight};
+    })()`);
+    await shot(win,'18-day-timeline');
+    await verify('day view fits without a stray scrollbar', todo, `(() => { const d=document.getElementById('dayView'); const over=d.scrollHeight-d.clientHeight; return over<=1 ? true : {over,scrollHeight:d.scrollHeight,clientHeight:d.clientHeight}; })()`);
     await todo("document.querySelector('[data-range=\"month\"]').click()");await wait(150);
     await verify('month tab stays selected after closing and reopening',todo,`(() => {document.getElementById('statsBack').click();document.getElementById('statsBtn').click();return document.querySelector('[data-range="month"]').getAttribute('aria-pressed')==='true'&&document.querySelector('[data-range="week"]').getAttribute('aria-pressed')==='false';})()`);
+    // 小窗兜底：统计面板自身不溢出视口，时间轴不被压扁，补录按钮仍可达。
+    await resizeMain(720,560);
+    await todo("document.querySelector('[data-range=\"day\"]').click()");await wait(200);
+    await verify('statistics stays usable in a small window',todo,`(() => {
+      const panel=document.getElementById('statsPanel').getBoundingClientRect();
+      const card=document.querySelector('.tl-card').getBoundingClientRect();
+      const tl=document.getElementById('timeline').getBoundingClientRect();
+      const add=document.getElementById('tlAdd').getBoundingClientRect();
+      const ok = panel.height<=innerHeight+1 && tl.height>=150 && card.height>=tl.height && add.top<panel.bottom;
+      return ok ? true : {panelHeight:Math.round(panel.height),innerHeight,tlHeight:Math.round(tl.height),cardHeight:Math.round(card.height),addTop:Math.round(add.top),panelBottom:Math.round(panel.bottom)};
+    })()`);
+    await shot(win,'19-stats-small-window');
     await todo("document.getElementById('statsBack').click()");
 
   }

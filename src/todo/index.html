@@ -32,16 +32,20 @@
 
   <!-- 月历浮层（点击日历按钮后显示） -->
   <div class="calendar-overlay" id="calendarOverlay" aria-label="任务日历">
-    <div class="cal-head">
-      <button class="icon-btn" id="calPrev" title="上个月"><sisy-icon name="LeftIcon"></sisy-icon></button>
-      <span class="cal-title" id="calTitle"></span>
-      <button class="icon-btn" id="calNext" title="下个月"><sisy-icon name="RightIcon"></sisy-icon></button>
+    <div class="cal-stage">
+      <div class="cal-body">
+        <div class="cal-head">
+          <button class="icon-btn" id="calPrev" title="上个月"><sisy-icon name="LeftIcon"></sisy-icon></button>
+          <span class="cal-title" id="calTitle"></span>
+          <button class="icon-btn" id="calNext" title="下个月"><sisy-icon name="RightIcon"></sisy-icon></button>
+        </div>
+        <div class="cal-weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="cal-days" id="calDays"></div>
+      </div>
+      <button class="cal-close" id="calClose" type="button">返回任务</button>
     </div>
-    <div class="cal-weekdays">
-      <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-    </div>
-    <div class="cal-days" id="calDays"></div>
-    <button class="cal-close" id="calClose" type="button">返回任务</button>
   </div>
 
   <div class="bottom-actions">
@@ -91,16 +95,18 @@
   </div>
 
   <div class="stats-panel" id="statsPanel" aria-labelledby="statsTitle" hidden>
-    <div class="settings-head"><button class="icon-btn" id="statsBack" title="返回"><sisy-icon name="LeftIcon"></sisy-icon></button><span class="settings-title" id="statsTitle">专注统计</span><span style="width:28px"></span></div>
+    <div class="settings-head"><button class="icon-btn" id="statsBack" title="返回"><sisy-icon name="LeftIcon"></sisy-icon></button><span class="stats-heading"><span class="settings-title" id="statsTitle">专注统计</span><span class="stats-sub" id="statsSub"></span></span><span style="width:28px"></span></div>
     <div class="stats-tabs" role="group" aria-label="统计范围"><button type="button" data-range="day" aria-pressed="false">每日</button><button type="button" data-range="week" aria-pressed="true">本周</button><button type="button" data-range="month" aria-pressed="false">本月</button></div>
     <div id="dayView" hidden>
-      <div class="tl-nav">
-        <button class="icon-btn" id="tlPrev" type="button" title="前一天" aria-label="前一天"><sisy-icon name="LeftIcon"></sisy-icon></button>
-        <span id="tlDay" role="status"></span>
-        <button class="icon-btn" id="tlNext" type="button" title="后一天" aria-label="后一天"><sisy-icon name="RightIcon"></sisy-icon></button>
-        <button class="list-filter" id="tlTodayBtn" type="button">今天</button>
+      <div class="tl-card">
+        <div class="tl-nav">
+          <button class="icon-btn" id="tlPrev" type="button" title="前一天" aria-label="前一天"><sisy-icon name="LeftIcon"></sisy-icon></button>
+          <span id="tlDay" role="status"></span>
+          <button class="icon-btn" id="tlNext" type="button" title="后一天" aria-label="后一天"><sisy-icon name="RightIcon"></sisy-icon></button>
+          <button class="list-filter" id="tlTodayBtn" type="button">今天</button>
+        </div>
+        <div class="timeline" id="timeline" role="list" aria-label="每日时间轴"></div>
       </div>
-      <div class="timeline" id="timeline" role="list" aria-label="每日时间轴"></div>
       <form class="tl-form" id="tlForm" hidden>
         <input id="tlTitle" aria-label="时段名称" placeholder="做了什么（补录必填）" autocomplete="off">
         <input id="tlStart" type="time" aria-label="开始时间" required>
@@ -109,7 +115,8 @@
         <button class="btn-ghost" id="tlCancel" type="button">取消</button>
       </form>
       <div class="tl-actions">
-        <button class="list-filter" id="tlAdd" type="button">+ 补录时段</button>
+        <button class="list-filter primary" id="tlAdd" type="button">+ 补录时段</button>
+        <span class="tl-actions-gap"></span>
         <button class="list-filter" id="noteDailyCopy" type="button">复制今日复盘</button>
         <button class="list-filter" id="noteDailySave" type="button">存为 .md</button>
         <button class="list-filter" id="noteWeeklyCopy" type="button">复制周报</button>

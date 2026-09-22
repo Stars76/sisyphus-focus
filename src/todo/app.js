@@ -301,11 +301,12 @@
       el.statsPanel.querySelectorAll('[data-range]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.range === statsRange)); });
       if (el.dayView) el.dayView.hidden = statsRange !== 'day';
       if (el.rangeView) el.rangeView.hidden = statsRange === 'day';
-      if (statsRange === 'day') { renderDayTimeline(); return; }
+      if (statsRange === 'day') { if (el.statsSub) el.statsSub.textContent = ''; renderDayTimeline(); return; }
       el.statsNote.textContent = '正在读取记录…';
       readHistory().then(function (history) {
         if (request !== statsRequest) return;
         var result = NS.statistics.summary(history, state.records(), statsRange);
+        if (el.statsSub) el.statsSub.textContent = result.since + ' 至 ' + result.until;
         el.statMinutes.textContent = result.minutes;
         el.statRounds.textContent = result.rounds;
         el.statTasks.textContent = result.tasks;
@@ -352,7 +353,10 @@
       readHistory().then(function (history) {
         if (request !== statsRequest) return;
         var blocks = NS.statistics.dayTimeline(history, tlDayKey, loadOverrides());
-        render.renderTimeline(blocks);
+        var now = new Date();
+        render.renderTimeline(blocks, {
+          nowMin: tlDayKey === date.todayKey() ? (now.getHours() * 60 + now.getMinutes()) : null
+        });
         var mins = blocks.reduce(function (a, b) { return a + b.minutes; }, 0);
         el.statsNote.textContent = '共 ' + blocks.length + ' 个时段 · ' + mins + ' 分钟。重叠时段并排显示；「改时间 / 隐藏」只修正显示，不动专注记录。';
       }).catch(function () { if (request === statsRequest) el.statsNote.textContent = '读取记录失败，请关闭后重试。'; });

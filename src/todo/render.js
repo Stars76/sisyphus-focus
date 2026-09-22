@@ -30,7 +30,7 @@
       listHeading: $('listHeading'),
       filterBtn: $('filterBtn'),
       settingsBtn: $('settingsBtn'),
-      statsBtn: $('statsBtn'), statsPanel: $('statsPanel'), statsBack: $('statsBack'),
+      statsBtn: $('statsBtn'), statsPanel: $('statsPanel'), statsBack: $('statsBack'), statsSub: $('statsSub'),
       statMinutes: $('statMinutes'), statRounds: $('statRounds'), statTasks: $('statTasks'), statStreak: $('statStreak'), statHours: $('statHours'), statsNote: $('statsNote'),
       calToggle: $('calToggle'),
       calendarOverlay: $('calendarOverlay'),
@@ -58,11 +58,12 @@
     function viewKey(id) { return state.viewDay + '/' + id; }
     function saveView() { NS.store.set('sisy-todo-view', { onlyOpen: onlyOpen, collapsed: Array.from(collapsed).slice(-1000) }); }
 
-    /* ---------------- 每日时间轴（重叠块并排分列，日历事件式布局） ---------------- */
-    function renderTimeline(blocks) {
+    /* ---------------- 每日时间轴（1 小时等高定位，容器内滚动到第一个时段） ---------------- */
+    function renderTimeline(blocks, opts) {
       var wrap = el.timeline;
       if (!wrap) return;
       wrap.replaceChildren();
+      wrap.scrollTop = 0;
       if (!blocks || !blocks.length) {
         var empty = document.createElement('p');
         empty.className = 'tl-empty';
@@ -71,16 +72,17 @@
         return;
       }
       var laid = NS.statistics.layoutTimeline(blocks);
+      var scroll = document.createElement('div');
+      scroll.className = 'tl-scroll';
       var axis = document.createElement('div');
       axis.className = 'tl-axis'; axis.setAttribute('aria-hidden', 'true');
-      for (var h = 0; h <= 21; h += 3) {
+      for (var h = 0; h <= 23; h++) {
         var tick = document.createElement('span');
-        tick.className = 'tl-tick';
+        tick.className = 'tl-tick' + (h % 6 === 0 ? ' major' : '');
         tick.style.top = (h / 24 * 100) + '%';
         tick.textContent = (h < 10 ? '0' : '') + h + ':00';
         axis.appendChild(tick);
       }
-      wrap.appendChild(axis);
       var track = document.createElement('div');
       track.className = 'tl-track';
       laid.forEach(function (b) {
@@ -94,7 +96,7 @@
         if (b.taskDay) blk.dataset.taskDay = b.taskDay;
         if (b.result === 'manual' && b.id) blk.dataset.mid = b.id;
         blk.style.top = (b.startMin / 1440 * 100) + '%';
-        blk.style.height = Math.max((b.endMin - b.startMin) / 1440 * 100, 2.4) + '%';
+        blk.style.height = Math.max((b.endMin - b.startMin) / 1440 * 100, 1.5) + '%';
         blk.style.left = 'calc(' + (b.col * 100 / b.cols) + '% + 2px)';
         blk.style.width = 'calc(' + (100 / b.cols) + '% - 4px)';
         var range = NS.statistics.toHhmm(b.startMin) + '–' + NS.statistics.toHhmm(b.endMin);
@@ -119,7 +121,19 @@
         blk.title = range + ' · ' + b.title;
         track.appendChild(blk);
       });
-      wrap.appendChild(track);
+      // 今天才画「现在」标线
+      if (opts && opts.nowMin != null) {
+        var now = document.createElement('div');
+        now.className = 'tl-now';
+        now.setAttribute('aria-hidden', 'true');
+        now.style.top = (opts.nowMin / 1440 * 100) + '%';
+        track.appendChild(now);
+      }
+      scroll.append(axis, track);
+      wrap.appendChild(scroll);
+      // 视口落在第一个时段前一小时，避免每次都从 00:00 看空白
+      var focusMin = laid[0] ? Math.max(0, laid[0].startMin - 60) : 8 * 60;
+      wrap.scrollTop = Math.max(0, track.offsetTop + focusMin / 1440 * track.offsetHeight - 44);
     }
     calMonth.setDate(1);
     calMonth.setHours(0, 0, 0, 0);
