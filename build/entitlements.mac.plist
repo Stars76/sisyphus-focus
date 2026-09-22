@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS 强化运行时（hardened runtime）授权，配合 package.json 的 mac.hardenedRuntime。
+  公证（notarization）要求开启强化运行时，而 Electron 的 V8 需要下面这几项才能启动：
+
+    allow-jit                             V8 需要可执行内存来生成 JIT 代码
+    allow-unsigned-executable-memory      兼容 Chromium 的部分内存分配路径
+    allow-dyld-environment-variables      开发期注入调试环境变量（Electron 官方模板同款）
+
+  本应用不发起任何网络请求、不读用户目录以外的位置（见 SECURITY.md），
+  因此不需要任何网络或文件访问类授权；也没有开启 App Sandbox。
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>

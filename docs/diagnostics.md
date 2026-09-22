@@ -2,11 +2,13 @@
 
 ## 先取这三样
 
-1. **日志**：`%APPDATA%\Sisyphus\logs\sisy.log`（设置 → 数据备份 → 打开日志；超 1MB 自动滚动为 `.1`）。
+数据目录（Windows `%APPDATA%\Sisyphus`，macOS `~/Library/Application Support/Sisyphus`）下：
+
+1. **日志**：`logs/sisy.log`（设置 → 数据备份 → 打开日志；超 1MB 自动滚动为 `.1`）。
    行格式 `[时间] LEVEL 文本`；换行被压平、单行 600 字符截断。
-2. **诊断快照**：DevTools（Ctrl+Shift+I）执行 `await window.dshApp.info()` →
+2. **诊断快照**：DevTools（Windows `Ctrl+Shift+I`，macOS `⌘⌥I`）执行 `await window.dshApp.info()` →
    含 `storeFile / backupDir / logFile / storeKeys / recovery / migrations / timer` 快照。
-3. **数据现场**：`%APPDATA%\Sisyphus\` 目录本身（含 `.corrupt-` / `.tmp` 文件与 `backups/`）。
+3. **数据现场**：数据目录本身（含 `.corrupt-` / `.tmp` 文件与 `backups/`）。
 
 ## 关键日志线索 → 含义
 
@@ -48,7 +50,8 @@ store 层已自动回滚（返回结果里的 `backup` 路径即导入前状态�
 node tools/check-syntax.js        # 静态检查（语法/引用/元素 id）
 node tools/check-links.js         # 文档内部链接与锚点
 node tools/selftest.js            # 逻辑自检 119 项
-node tests/run-all.js             # 回归套件（8 套 / 387 项断言）
+node tests/run-all.js             # 回归套件（9 套 / 425 项断言）
 npm run smoke                     # 双窗口同步冒烟（需真实桌面会话，结果见 tools/smoke-result.json）
-powershell -File build\win-build.ps1   # 全量：测试+打包+产物一致性校验
+powershell -File build\win-build.ps1   # Windows 全量：测试+打包+产物一致性校验
+bash build/mac-build.sh           # macOS 全量：同上，另补 ad-hoc 签名与 codesign 状态
 ```

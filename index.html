@@ -50,7 +50,11 @@
   var NS = window.DSH || {};
   var log = NS.log;
   var api = window.dshWindow;
-  if(api) document.body.classList.add('electron');
+  if(api){
+    document.body.classList.add('electron');
+    // 平台 class：macOS 下隐藏自绘窗口按钮、给系统红绿灯让出左侧位置（见 src/shell.css）
+    if(api.platform) document.body.classList.add('platform-'+api.platform);
+  }
 
   /* ---------- 导航：今日事切换视图；专注钟弹出小窗（浏览器回退为切视图） ---------- */
   var links=document.querySelectorAll('.nav a');
@@ -79,11 +83,15 @@
     document.getElementById('btnClose').addEventListener('click',function(){api.close();});
     if(api.isMaximized) api.isMaximized().then(function(m){btnMax.classList.toggle('maximized',!!m);}).catch(function(e){if(log)log.warn('读取最大化状态失败',e);});
     if(api.onState) api.onState(function(s){btnMax.classList.toggle('maximized',!!(s&&s.maximized));});
-    /* 双击标题栏空白处切换最大化 */
-    document.getElementById('titlebar').addEventListener('dblclick',function(e){
-      if(e.target.closest('.nav')||e.target.closest('.win-controls')||e.target.closest('.timer-chip'))return;
-      api.toggleMaximize();
-    });
+    /* 双击标题栏空白处切换最大化。
+       macOS 不接管：系统会按「系统设置 → 桌面与程序坞 → 双击标题栏」的偏好处理，
+       自己再 toggleMaximize 一次会与之打架。 */
+    if(api.platform !== 'darwin'){
+      document.getElementById('titlebar').addEventListener('dblclick',function(e){
+        if(e.target.closest('.nav')||e.target.closest('.win-controls')||e.target.closest('.timer-chip'))return;
+        api.toggleMaximize();
+      });
+    }
   }
 
   /* ---------- 标题栏实时计时状态（主进程唯一状态） ---------- */

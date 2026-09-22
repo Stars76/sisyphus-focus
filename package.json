@@ -1,7 +1,7 @@
 {
   "name": "sisyphus-focus",
   "productName": "Sisyphus",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "西西弗斯 · 专注工作台：本地优先的 Windows 桌面专注工具（今日事任务管理 + 字符海专注钟），无网络请求、无遥测",
   "main": "main.js",
   "author": {
@@ -49,7 +49,9 @@
     "verify:signature": "powershell -NoProfile -ExecutionPolicy Bypass -File build/check-signature.ps1",
     "dist": "electron-builder --win portable",
     "dist:nsis": "electron-builder --win nsis",
-    "dist:all": "electron-builder --win portable nsis"
+    "dist:all": "electron-builder --win portable nsis",
+    "dist:mac": "electron-builder --mac dmg zip",
+    "dist:mac:dir": "electron-builder --mac --dir"
   },
   "devDependencies": {
     "@electron/asar": "^3.2.18",
@@ -85,6 +87,26 @@
         "signingHashAlgorithms": ["sha256"],
         "rfc3161TimeStampServer": "http://timestamp.digicert.com"
       }
+    },
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x64"] },
+        { "target": "zip", "arch": ["arm64", "x64"] }
+      ],
+      "artifactName": "Sisyphus-${version}-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "artifactName": "Sisyphus-${version}-mac-${arch}.${ext}",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "portable": {
       "requestExecutionLevel": "user",

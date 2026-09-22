@@ -5,6 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 /* ---------------- 窗口控制 ---------------- */
 contextBridge.exposeInMainWorld('dshWindow', {
+  // 渲染层据此做平台适配（标题栏让出红绿灯位置、隐藏自绘按钮、不覆盖系统双击行为）。
+  // 直接读 process.platform，避免为了一个 CSS class 走一次异步 IPC。
+  platform: process.platform,
   minimize: () => ipcRenderer.send('win:minimize'),
   toggleMaximize: () => ipcRenderer.send('win:maximize'),
   close: () => ipcRenderer.send('win:close'),

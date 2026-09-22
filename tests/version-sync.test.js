@@ -30,6 +30,21 @@ H.assert(!!build.nsis && build.nsis.deleteAppDataOnUninstall === false, 'NSIS �
 H.assert(String(build.portable.artifactName || '').includes('${version}'), 'portable 产物名带版本号', build.portable.artifactName);
 H.assert(String(build.nsis.artifactName).includes('${version}'), 'nsis 产物名带版本号', build.nsis.artifactName);
 
+H.group('2b. macOS 构建配置');
+const mac = build.mac || {};
+const macTargets = (mac.target || []).map((t) => t.target);
+H.assert(macTargets.indexOf('dmg') !== -1 && macTargets.indexOf('zip') !== -1, 'mac 目标含 dmg + zip', macTargets);
+H.eq(mac.category, 'public.app-category.productivity', 'mac 声明应用分类（Finder 归类用）');
+H.assert(fs.existsSync(path.join(root, mac.icon || '')), 'mac 图标文件存在', mac.icon);
+H.assert(String(mac.artifactName || '').includes('${version}'), 'mac 产物名带版本号', mac.artifactName);
+// arm64 与 x64 都产出，产物名必须带 ${arch}，否则两个架构互相覆盖
+H.assert(String(mac.artifactName || '').includes('${arch}'), 'mac 产物名带架构', mac.artifactName);
+H.assert(mac.hardenedRuntime === true, 'mac 开启强化运行时（公证的前置条件）');
+H.assert(fs.existsSync(path.join(root, mac.entitlements || '')), 'mac entitlements 文件存在', mac.entitlements);
+const macArchs = [];
+(mac.target || []).forEach((t) => (t.arch || []).forEach((a) => macArchs.push(a)));
+H.assert(macArchs.indexOf('arm64') !== -1 && macArchs.indexOf('x64') !== -1, 'mac 覆盖 arm64 与 x64', macArchs);
+
 H.group('3. electron 依赖与 electronVersion 对齐');
 if (fs.existsSync(path.join(root, 'node_modules/electron/package.json'))) {
   const installed = JSON.parse(fs.readFileSync(path.join(root, 'node_modules/electron/package.json'), 'utf8')).version;
