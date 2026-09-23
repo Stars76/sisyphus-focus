@@ -158,7 +158,7 @@ git push origin v2.0.0
 - [ ] `https://github.com/$owner/sisyphus-focus` → About 里有描述与 topics，Releases 显示下载入口
 - [ ] Actions 里 `Windows Build`（PR 触发）与 `Continuous Release`（主分支触发）至少各成功一次
 - [ ] 仓库 Insights → Community Standards 里 CONTRIBUTING / CODE_OF_CONDUCT / SECURITY / issue 模板 / PR 模板**全部已识别**
-- [ ] Release 附件里有 `Sisyphus-2.1.0-setup.exe`、`Sisyphus-2.1.0-portable.exe`、`SHA256SUMS.txt`
+- [ ] Release 附件里有 `Sisyphus-2.3.0-setup.exe`、`Sisyphus-2.3.0-portable.exe`、`SHA256SUMS.txt`
 - [ ] 下载 portable 双击能跑，数据落在 `%APPDATA%\Sisyphus\sisy-store.json`
 - [ ] macOS：`bash build/mac-build.sh` 能出 `.app`，双击能开，`codesign --verify` 通过（CI 不覆盖 macOS，这条只能本机自查）
 - [ ] `README.en.md` 与中文 README 互链能跳转；`docs/data.md#7-从-1x-手工迁移` 锚点不 404

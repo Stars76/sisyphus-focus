@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform: Windows 10/11 · macOS 12+](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B-blue)
 ![Electron: 33.4.11](https://img.shields.io/badge/Electron-33.4.11-47848F)
-![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)
+![Version: 2.3.0](https://img.shields.io/badge/version-2.3.0-blue)
 ![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20deps-0-success)
 
 [中文](README.md) · English
@@ -32,8 +32,8 @@ No system title bar: on Windows the drag region, navigation, and minimize/maximi
 
 | File | Notes |
 |------|-------|
-| `Sisyphus-2.1.0-setup.exe` | Installer: installs to `%LOCALAPPDATA%\Programs`, creates Desktop and Start Menu shortcuts (named "西西弗斯"), **user data is preserved on uninstall** |
-| `Sisyphus-2.1.0-portable.exe` | Portable: double-click to run directly; data likewise lives in `%APPDATA%\Sisyphus` |
+| `Sisyphus-2.3.0-setup.exe` | Installer: installs to `%LOCALAPPDATA%\Programs`, creates Desktop and Start Menu shortcuts (named "西西弗斯"), **user data is preserved on uninstall** |
+| `Sisyphus-2.3.0-portable.exe` | Portable: double-click to run directly; data likewise lives in `%APPDATA%\Sisyphus` |
 
 > **The artifacts are not code-signed** (this project has not purchased a code-signing certificate), so on first run SmartScreen may warn "Unknown publisher" —
 > just click "More info → Run anyway". To verify integrity, compare against `SHA256SUMS.txt` in the Release.

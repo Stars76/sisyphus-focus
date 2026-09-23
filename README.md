@@ -3,7 +3,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Platform: Windows 10/11 · macOS 12+](https://img.shields.io/badge/platform-Windows%2010%2F11%20%C2%B7%20macOS%2012%2B-blue)
 ![Electron: 33.4.11](https://img.shields.io/badge/Electron-33.4.11-47848F)
-![Version: 2.1.0](https://img.shields.io/badge/version-2.1.0-blue)
+![Version: 2.3.0](https://img.shields.io/badge/version-2.3.0-blue)
 ![Runtime dependencies: 0](https://img.shields.io/badge/runtime%20deps-0-success)
 
 [English](README.en.md) · 中文
@@ -32,8 +32,8 @@
 
 | 文件 | 说明 |
 |------|------|
-| `Sisyphus-2.1.0-setup.exe` | 安装版：装到 `%LOCALAPPDATA%\Programs`，创建桌面与开始菜单快捷方式（名称「西西弗斯」），**卸载保留用户数据** |
-| `Sisyphus-2.1.0-portable.exe` | 免安装版：双击直接运行，数据同样在 `%APPDATA%\Sisyphus` |
+| `Sisyphus-2.3.0-setup.exe` | 安装版：装到 `%LOCALAPPDATA%\Programs`，创建桌面与开始菜单快捷方式（名称「西西弗斯」），**卸载保留用户数据** |
+| `Sisyphus-2.3.0-portable.exe` | 免安装版：双击直接运行，数据同样在 `%APPDATA%\Sisyphus` |
 
 > **产物未做代码签名**（本项目没有购买代码签名证书），首次运行 SmartScreen 可能提示「未知发布者」，
 > 点「更多信息 → 仍要运行」即可。校验完整性请对照 Release 里的 `SHA256SUMS.txt`。
